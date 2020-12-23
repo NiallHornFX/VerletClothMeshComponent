@@ -12,12 +12,12 @@
 #define DEBUG_PRINT_LOG
 #define DEBUG_DRAW_CONSTRAINTS
 
-DECLARE_STATS_GROUP(TEXT("VerletCloth"),                STATGROUP_VerletCloth,               STATCAT_Advanced);
-DECLARE_CYCLE_STAT(TEXT("VerletCloth Sim"),             STAT_VerletCloth_SimTime,            STATGROUP_VerletCloth);
-DECLARE_CYCLE_STAT(TEXT("VerletCloth Constraints"),     STAT_VerletCloth_ConTime,            STATGROUP_VerletCloth);
-DECLARE_CYCLE_STAT(TEXT("VerletCloth World Collision"), STAT_VerletCloth_WorldCollisionTime, STATGROUP_VerletCloth);
-DECLARE_CYCLE_STAT(TEXT("VerletCloth Self Collision"),  STAT_VerletCloth_SelfCollisionTime,  STATGROUP_VerletCloth);
-DECLARE_CYCLE_STAT(TEXT("VerletCloth Integrate"),       STAT_VerletCloth_IntegrateTime,      STATGROUP_VerletCloth);
+DECLARE_STATS_GROUP(TEXT("VerletCloth"), STATGROUP_VerletClothComponent, STATCAT_Advanced);
+DECLARE_CYCLE_STAT(TEXT("VerletCloth Sim"),             STAT_VerletCloth_SimTime,            STATGROUP_VerletClothComponent);
+DECLARE_CYCLE_STAT(TEXT("VerletCloth Constraints"),     STAT_VerletCloth_ConTime,            STATGROUP_VerletClothComponent);
+DECLARE_CYCLE_STAT(TEXT("VerletCloth World Collision"), STAT_VerletCloth_WorldCollisionTime, STATGROUP_VerletClothComponent);
+DECLARE_CYCLE_STAT(TEXT("VerletCloth Self Collision"),  STAT_VerletCloth_SelfCollisionTime,  STATGROUP_VerletClothComponent);
+DECLARE_CYCLE_STAT(TEXT("VerletCloth Integrate"),       STAT_VerletCloth_IntegrateTime,      STATGROUP_VerletClothComponent);
 
 UVerletClothMeshComponent::UVerletClothMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
