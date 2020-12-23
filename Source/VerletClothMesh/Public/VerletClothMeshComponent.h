@@ -9,6 +9,7 @@
 
 #define INLINE __forceinline
 
+class  hash_grid; 
 struct FVerletClothConstraint;
 
 struct FVerletClothParticle
@@ -66,9 +67,6 @@ public:
 		int32 ConstraintIterations;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
-		bool bUseBendConstraints;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
 		bool bWorldCollision;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
@@ -98,6 +96,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (EditCondition = "bUse_Sleeping"))
 		float Sleep_DeltaThreshold;
 
+	// VerletCloth - Props - Self Collision 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Self Collision", meta = (ClampMin = "1", ClampMax = "8"))
+		int32 SelfColIterations;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Self Collision", meta = (ClampMin = "0", ClampMax = "100"))
+		int32 Cells_PerDim;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cloth Self Collision", meta = (UIMin = "1.0", UIMax = "10000.0"))
+		float Grid_Size;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Self Collision")
+		bool bShow_Grid;
+
+	// VerletCloth - Props - Cloth Simulation Debug
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation Debug", meta = (EditCondition = "bUse_Sleeping"))
 		bool bShow_Sleeping;
 
@@ -121,7 +133,7 @@ public:
 	//void DBG_ShowAdjacency();
 
 private:
-	// Solver Methods
+	// Internal Solver Methods
 
 	void BuildTriArrays();
 
@@ -133,12 +145,14 @@ private:
 
 	void ClothCollisionWorld();
 
+	void ClothCollisionSelf(hash_grid *hg);
+
 	void Integrate(float InSubstepTime);
 
 	static void SolveDistanceConstraint(FVerletClothParticle& ParticleA, FVerletClothParticle& ParticleB, float RestDistance, float StiffnessCoeff);
 
-	//void ClothSelfCollision(hash_grid *hg);
-	//void SubstepSolve(float deltaSubstepTime);
+	void SubstepSolve();
+
 	//float ClothWorldCollision_AvgPosDelta();
 	//bool GetSleepState();
 
@@ -181,6 +195,7 @@ private:
 	} smData;
 
 	friend struct FVerletClothConstraint;
+	friend class  hash_grid;
 };
 
 // Square Distance Between 2 Position Vectors. 

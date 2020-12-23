@@ -1,6 +1,9 @@
 // Implements
 #include "VerletClothMeshComponent.h"
 
+// Plugin Headers
+#include "HashGrid.h"
+
 // UE4 Headers
 #include "Engine/World.h"
 #include "DrawDebugHelpers.h"
@@ -31,7 +34,6 @@ UVerletClothMeshComponent::UVerletClothMeshComponent(const FObjectInitializer& O
 	bShowStaticMesh = true;
 	bSimulate = false;
 	ConstraintIterations = 4;
-	bUseBendConstraints = true;
 	bShow_Constraints = true;
 	bWorldCollision = true;
 	bSelfCollision = false;
@@ -43,6 +45,12 @@ UVerletClothMeshComponent::UVerletClothMeshComponent(const FObjectInitializer& O
 	bUse_Sleeping = false;
 	bShow_Sleeping = false;
 	Sleep_DeltaThreshold = 0.025f; 
+
+	// Self Collision Defaults
+	SelfColIterations = 4;
+	Grid_Size = 100.0f; 
+	Cells_PerDim = 4;
+	bShow_Grid = false;
 
 	ParticleMass = 1.0f; ParticleRadius = 2.5f;
 
@@ -65,6 +73,26 @@ void UVerletClothMeshComponent::OnRegister()
 	sm->SetVisibility(bShowStaticMesh);
 }
 
+// Simulation Per Substep Operations.
+void UVerletClothMeshComponent::SubstepSolve()
+{
+	SCOPE_CYCLE_COUNTER(STAT_VerletCloth_SimTime);
+
+	Integrate(SubstepTime);
+
+	EvalClothConstraints();
+
+	if (bWorldCollision) ClothCollisionWorld();
+
+	if (bSelfCollision)
+	{
+		hash_grid grid(this, GetWorld(), Cells_PerDim, Grid_Size, bShow_Grid);
+		grid.particle_hash();
+		ClothCollisionSelf(&grid);
+	}
+}
+
+
 void UVerletClothMeshComponent::TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction *ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
@@ -77,12 +105,16 @@ void UVerletClothMeshComponent::TickComponent(float DeltaTime, enum ELevelTick T
 		At += Dt; 
 		while (At > St)
 		{
+			/*
 			SCOPE_CYCLE_COUNTER(STAT_VerletCloth_SimTime);
 			// Solve
 			Integrate(St);
 			EvalClothConstraints();
 			ClothCollisionWorld(); 
-			
+			*/
+
+			SubstepSolve();
+
 			At -= St;
 		}
 
@@ -324,6 +356,11 @@ void UVerletClothMeshComponent::ClothCollisionWorld()
 	}
 }
 
+// Self Collisions using a hash Grid Accleration Structure
+void UVerletClothMeshComponent::ClothCollisionSelf(hash_grid *hg)
+{
+	// todo...
+}
 
 // Solve a single distance constraint between a pair of particles by modifying particle postions to minimize CurDist-RestLength delta. 
 void UVerletClothMeshComponent::SolveDistanceConstraint(FVerletClothParticle& ParticleA, FVerletClothParticle& ParticleB, float RestLength, float StiffnessCoeff)
