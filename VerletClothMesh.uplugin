@@ -1,0 +1,30 @@
+{
+  "FileVersion": 1,
+  "Version": 0.1,
+  "VersionName": "Dev",
+  "FriendlyName": "VerletClothMesh",
+  "Description": "Cloth Simulation Using Verlet Integration",
+  "Category": "Other",
+  "CreatedBy": "Niall Horn",
+  "CreatedByURL": "niallhornfx.co.uk",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "SupportURL": "",
+  "CanContainContent": true,
+  "IsBetaVersion": false,
+  "IsExperimentalVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "VerletClothMesh",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [                       
+    {                               
+      "Name": "ProceduralMeshComponent",    
+      "Enabled": true                
+    }                               
+  ]   
+}
