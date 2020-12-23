@@ -7,16 +7,18 @@
 #include "Math/RandomStream.h"
 #include "DrawDebugHelpers.h"
 
+#define DEBUG_DRAW_GRIDPTS
+
 //#include "Stats/Stats.h"
 //DECLARE_STATS_GROUP(TEXT("VerletCloth"), STATGROUP_VerletClothComponent, STATCAT_Advanced);
 //DECLARE_CYCLE_STAT(TEXT("VerletCloth Grid Hash"), STAT_VerletCloth_GridHashTime, STATGROUP_VerletClothComponent);
 
-hash_grid::hash_grid(UVerletClothMeshComponent *cloth, UWorld *world, int32 c_dim, float g_size, bool draw) 
+HashGrid::HashGrid(UVerletClothMeshComponent *cloth, UWorld *world, int32 c_dim, float g_size, bool draw) 
 	: Cloth(cloth) 
 	, World(world)
 	, C_dim(c_dim)
 	, G_size(g_size)
-	, draw_grid(draw)
+	, draw_colour(draw)
 {
 	C_count = C_dim * C_dim * C_dim;
 	C_size = G_size / (float)C_dim;
@@ -27,7 +29,7 @@ hash_grid::hash_grid(UVerletClothMeshComponent *cloth, UWorld *world, int32 c_di
 	hashgrid_mask.AddDefaulted(C_count);
 }
 
-hash_grid::~hash_grid()
+HashGrid::~HashGrid()
 {
 	for (uint32 i = 0; i < C_count; ++i)
 	{
@@ -39,12 +41,12 @@ hash_grid::~hash_grid()
 	delete[] hashgrid;
 }
 
-void hash_grid::particle_hash()
+void HashGrid::ParticleHash()
 {
 	//SCOPE_CYCLE_COUNTER(STAT_VerletCloth_GridHashTime);
 
-	float C_size_rec = 1.0f / C_size;
 	// Particle Position Key, hash --> 1D grid cell index. Output == 0-(bck_cnt-1) Indices. 
+	float C_size_rec = 1.0f / C_size;
 	auto hashPt = [&](const FVector &PPos) -> uint32
 	{
 		int32 xx = static_cast<int32>(PPos.X * C_size_rec), yy = static_cast<int32>(PPos.Y * C_size_rec), zz = static_cast<int32>(PPos.Z * C_size_rec); // int3 key.
@@ -64,15 +66,28 @@ void hash_grid::particle_hash()
 		hashgrid_mask[h_idx] = true;
 		curPt.C_idx = h_idx; // Store cell on pt. 
 
-		// Viz - ! Colour per hash cell.
-		if (draw_grid)
+		// Viz - Particle Colours from hash cell indices. 
+		if (draw_colour)
 		{
 			FRandomStream rng_r(h_idx), rng_g(h_idx + 123), rng_b(h_idx + 4567);
 			int32 r = static_cast<int32>(rng_r.FRandRange(0, 255)), g = static_cast<int32>(rng_g.FRandRange(0, 255)), b = static_cast<int32>(rng_b.FRandRange(0, 255));
 			curPt.Col = FColor(r, g, b, 255);
-			#ifdef DBG_DRAW_GRIDPTS
-			DrawDebugSphere(World, curPt.Position, Cloth->ParticleRadius, 3, FColor(r, g, b, 255), false, Cloth->SubstepTime);
-			#endif
 		}
+	}
+}
+
+
+// Viz - For Editor Visual Debugging of Spatial Hash Locality in editor. Assumes ParticleHash() has already been called. 
+void HashGrid::VizHash(float t) const
+{
+	for (int32 i = 0; i < Cloth->Particles.Num(); ++i)
+	{
+		FVerletClothParticle &curPt = Cloth->Particles[i];
+		uint32 h_idx = curPt.C_idx;
+
+		FRandomStream rng_r(h_idx), rng_g(h_idx + 123), rng_b(h_idx + 4567);
+		int32 r = static_cast<int32>(rng_r.FRandRange(0, 255)), g = static_cast<int32>(rng_g.FRandRange(0, 255)), b = static_cast<int32>(rng_b.FRandRange(0, 255));
+		curPt.Col = FColor(r, g, b, 255);
+		DrawDebugSphere(World, curPt.Position, Cloth->ParticleRadius, 3, FColor(r, g, b, 255), false, t);
 	}
 }

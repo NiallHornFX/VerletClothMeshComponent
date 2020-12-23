@@ -11,20 +11,22 @@ struct FVerletClothParticle;
 // Private Classes, for internal plugin use only, not exposed to edtior. 
 
 // Hash Grid Class to support Spatial Hashing of cloth particles, of some finite grid_size into some set cell count. To Acclerate Self Collisions.
-class hash_grid  
+class HashGrid  
 {
 public:
-	hash_grid(UVerletClothMeshComponent *cloth, UWorld *world, int32 c_dim, float g_size, bool draw);
+	HashGrid(UVerletClothMeshComponent *cloth, UWorld *world, int32 c_dim, float g_size, bool draw);
 
-	~hash_grid();
+	~HashGrid();
 
-	void particle_hash(); 
+	void ParticleHash(); 
+
+	void VizHash(float t) const;
 
 private:
 
 	uint32 C_dim, C_count;
 	float C_size, G_size;
-	bool draw_grid;
+	bool draw_colour;
 
 	UVerletClothMeshComponent *Cloth;
 	UWorld *World;

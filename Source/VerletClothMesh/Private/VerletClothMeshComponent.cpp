@@ -34,9 +34,9 @@ UVerletClothMeshComponent::UVerletClothMeshComponent(const FObjectInitializer& O
 	bShowStaticMesh = true;
 	bSimulate = false;
 	ConstraintIterations = 4;
-	bShow_Constraints = true;
+	bShow_Constraints = false;
 	bWorldCollision = true;
-	bSelfCollision = false;
+	bSelfCollision = true;
 	SubstepTime = 0.02f;
 	StiffnessCoefficent = 0.5f; 
 	CollisionFriction = 0.2f; 
@@ -86,8 +86,8 @@ void UVerletClothMeshComponent::SubstepSolve()
 
 	if (bSelfCollision)
 	{
-		hash_grid grid(this, GetWorld(), Cells_PerDim, Grid_Size, bShow_Grid);
-		grid.particle_hash();
+		HashGrid grid(this, GetWorld(), Cells_PerDim, Grid_Size, bShow_Grid);
+		grid.ParticleHash();
 		ClothCollisionSelf(&grid);
 	}
 }
@@ -100,31 +100,21 @@ void UVerletClothMeshComponent::TickComponent(float DeltaTime, enum ELevelTick T
 	Dt = DeltaTime;
 	St = FMath::Max(SubstepTime, 0.01f); // Clamp to min substeptime. 
 
+	// ToDo GetSleepState - only simulate this tick if not sleep. 
 	if (bSimulate)
 	{
 		At += Dt; 
 		while (At > St)
 		{
-			/*
-			SCOPE_CYCLE_COUNTER(STAT_VerletCloth_SimTime);
-			// Solve
-			Integrate(St);
-			EvalClothConstraints();
-			ClothCollisionWorld(); 
-			*/
-
 			SubstepSolve();
-
 			At -= St;
 		}
-
 		TickUpdateCloth();
 	}
 	else if (!bSimulate)
 	{
 		// Sleep
 	}
-
 }
 
 // Reset Cloth to Inital State defined by Cloth Static Mesh.
@@ -357,7 +347,7 @@ void UVerletClothMeshComponent::ClothCollisionWorld()
 }
 
 // Self Collisions using a hash Grid Accleration Structure
-void UVerletClothMeshComponent::ClothCollisionSelf(hash_grid *hg)
+void UVerletClothMeshComponent::ClothCollisionSelf(HashGrid *hg)
 {
 	// todo...
 }
@@ -389,14 +379,14 @@ void UVerletClothMeshComponent::EvalClothConstraints()
 		{
 			SolveDistanceConstraint(con.Pt0, con.Pt1, con.restLength, StiffnessCoefficent);
 			if (bShow_Constraints) {
-				if (k == ConstraintIterations - 1) DrawDebugLine(world, con.Pt0.Position, con.Pt1.Position, FColor(255, 0, 0), false, Dt);
+				if (k == ConstraintIterations - 1) DrawDebugLine(world, con.Pt0.Position, con.Pt1.Position, FColor(255, 0, 0), false, Dt * 2.0f);
 			}
 		}
 	}
 }
 
 // Debug Function to show Particle Radii in the Editor.
-void UVerletClothMeshComponent::DBG_ShowParticles()
+void UVerletClothMeshComponent::DBG_ShowParticles() const
 {
 	UWorld *world = GetWorld();
 	for (const FVerletClothParticle &pt : Particles)
@@ -405,7 +395,7 @@ void UVerletClothMeshComponent::DBG_ShowParticles()
 	}
 }
 
-void UVerletClothMeshComponent::DBG_ShowTris()
+void UVerletClothMeshComponent::DBG_ShowTris() const
 {
 	// For Now just show Indv Spheres per Tri, to validate storing Tris implicilty by there vert indices only within a FIntVector ...
 	UWorld *world = GetWorld();
@@ -417,4 +407,17 @@ void UVerletClothMeshComponent::DBG_ShowTris()
 		cPos += GetComponentLocation();
 		DrawDebugSphere(world, cPos, ParticleRadius * 1.25f, 3, FColor(r, g, b, 255), false, 5.0f);
 	}
+}
+
+void UVerletClothMeshComponent::DBG_ShowAdjacency() const
+{
+	// 
+}
+
+// Create temp HashGrid using current settings, to viz in editor. 
+void UVerletClothMeshComponent::DBG_ShowHash() 
+{
+	HashGrid grid(this, GetWorld(), Cells_PerDim, Grid_Size, bShow_Grid);
+	grid.ParticleHash();
+	grid.VizHash(5.0f);
 }

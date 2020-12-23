@@ -9,7 +9,7 @@
 
 #define INLINE __forceinline
 
-class  hash_grid; 
+class  HashGrid; 
 struct FVerletClothConstraint;
 
 struct FVerletClothParticle
@@ -124,13 +124,16 @@ public:
 	void ResetToInitalState();
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
-	void DBG_ShowParticles();
+	void DBG_ShowParticles() const;
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
-	void DBG_ShowTris();
+	void DBG_ShowTris() const;
 
-	//UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
-	//void DBG_ShowAdjacency();
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
+	void DBG_ShowAdjacency() const;
+
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug", meta = (EditCondition = "bSelfCollision"))
+	void DBG_ShowHash();
 
 private:
 	// Internal Solver Methods
@@ -145,7 +148,7 @@ private:
 
 	void ClothCollisionWorld();
 
-	void ClothCollisionSelf(hash_grid *hg);
+	void ClothCollisionSelf(HashGrid *hg);
 
 	void Integrate(float InSubstepTime);
 
@@ -195,7 +198,7 @@ private:
 	} smData;
 
 	friend struct FVerletClothConstraint;
-	friend class  hash_grid;
+	friend class  HashGrid;
 };
 
 // Square Distance Between 2 Position Vectors. 
