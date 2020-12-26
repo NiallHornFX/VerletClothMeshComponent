@@ -34,5 +34,5 @@ private:
 	TArray<FVerletClothParticle*> **hashgrid;
 	TArray<bool> hashgrid_mask;
 
-	friend class UVerletClothComponent;
+	friend class UVerletClothMeshComponent;
 };

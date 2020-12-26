@@ -14,6 +14,7 @@
 
 #define DEBUG_PRINT_LOG
 #define DEBUG_DRAW_CONSTRAINTS
+//#define DEBUG_ASSERT
 
 DECLARE_STATS_GROUP(TEXT("VerletCloth"), STATGROUP_VerletClothComponent, STATCAT_Advanced);
 DECLARE_CYCLE_STAT(TEXT("VerletCloth Sim"),             STAT_VerletCloth_SimTime,            STATGROUP_VerletClothComponent);
@@ -150,7 +151,6 @@ void UVerletClothMeshComponent::BuildClothState()
 	particleCount = smData.vert_count;
 		
 	#ifdef DEBUG_PRINT_LOG
-	UE_LOG(LogTemp, Error, TEXT("STATIC MESH HAS ADJACNEY INFO = %d"), static_cast<int32>(lod0->bHasAdjacencyInfo));
 	UE_LOG(LogTemp, Warning, TEXT("DBG::Static Mesh Vertex Count == %d | Index Count = %d"), smData.vert_count, smData.ind_count);
 	#endif
 
@@ -225,8 +225,6 @@ void UVerletClothMeshComponent::BuildClothConstraints()
 
 	// Clear Previous Constraints
 	Constraints.Empty();
-
-	// Structual Constraints Only For now ...
 
 	// For Each Particle(Vert) get triangles i'm a part of,
 	for (int32 p = 0; p < particleCount; ++p)
@@ -349,7 +347,48 @@ void UVerletClothMeshComponent::ClothCollisionWorld()
 // Self Collisions using a hash Grid Accleration Structure
 void UVerletClothMeshComponent::ClothCollisionSelf(HashGrid *hg)
 {
-	// todo...
+	SCOPE_CYCLE_COUNTER(STAT_VerletCloth_SelfCollisionTime);
+	UWorld *world = GetWorld();
+	pr2sqr = 2 * (ParticleRadius * ParticleRadius);
+
+	// For Particles (i) Get HashGridIndex, eval only other particles (j) in same cell.
+	for (int32 it = 0; it < SelfColIterations; ++it)
+	{
+		for (int32 i = 0; i < Particles.Num(); ++i)
+		{
+			FVerletClothParticle &curPt = Particles[i]; 
+			int32 cur_cellidx = curPt.C_idx;
+			if (curPt.state == 0) continue; // Pinned Pt. 
+
+			#ifdef DEBUG_ASSERT
+			check(curPt.C_idx != -1);
+			#endif
+			TArray<FVerletClothParticle*> *c_list = hg->hashgrid[cur_cellidx];
+
+			for (int32 j = 0; j < c_list->Num(); ++j)
+			{
+				// Eval For Self Collision
+				FVerletClothParticle &othPt = *(*c_list)[j];
+				if (othPt.ID == curPt.ID) continue; // Assume its the same pt. 
+
+				// Intersection Dist Check.
+				float dist_sqr = SquareDist(curPt.Position, othPt.Position);
+				FVector dir = othPt.Position - curPt.Position; dir.Normalize();
+
+				// If Less than 2PRsqrd, project particles away to minimize intersection distance. 
+				if (dist_sqr < pr2sqr)
+				{
+					float inter_dist = FMath::Sqrt(pr2sqr - dist_sqr);
+					curPt.Position -= dir * (inter_dist * 0.5f);
+					othPt.Position += dir * (inter_dist * 0.5f);
+
+					// Resolve Implicit Verlet Velocity - (hacky zero delta).
+					curPt.PrevPosition = curPt.Position;
+					othPt.PrevPosition = othPt.Position;
+				}
+			}
+		}
+	}
 }
 
 // Solve a single distance constraint between a pair of particles by modifying particle postions to minimize CurDist-RestLength delta. 
@@ -409,10 +448,35 @@ void UVerletClothMeshComponent::DBG_ShowTris() const
 	}
 }
 
+// Debug Show Tangents of current Procedual Mesh State.
+void UVerletClothMeshComponent::DBG_ShowTangents()
+{
+	UWorld *world = GetWorld();
+	FVector compLoc = GetComponentLocation();
+	float scale = 10.0f;
+
+	for (int32 i = 0; i < smData.vert_count; ++i)
+	{
+		FProcMeshVertex &pmv = GetProcMeshSection(0)->ProcVertexBuffer[i];
+		FVector Tang = pmv.Tangent.TangentX; FVector Norm = FVector(pmv.Normal.X, pmv.Normal.Y, pmv.Normal.Z);
+		FVector BiTang = Norm ^ Tang;
+		FVector vPos = pmv.Position + compLoc; 
+		// Draw Tangent
+		DrawDebugLine(world, vPos, vPos + (Tang * scale), FColor(255, 0, 0), false, 5.0f);
+		// Draw Normal
+		DrawDebugLine(world, vPos, vPos + (Norm * scale), FColor(0, 0, 255), false, 5.0f);
+		// Draw BiTang
+		DrawDebugLine(world, vPos, vPos + (BiTang * scale), FColor(0, 255, 0), false, 5.0f);
+	}
+}
+
+/*
 void UVerletClothMeshComponent::DBG_ShowAdjacency() const
 {
 	// 
 }
+*/
+
 
 // Create temp HashGrid using current settings, to viz in editor. 
 void UVerletClothMeshComponent::DBG_ShowHash() 

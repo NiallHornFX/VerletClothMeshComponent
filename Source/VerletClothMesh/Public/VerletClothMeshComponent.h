@@ -130,7 +130,10 @@ public:
 	void DBG_ShowTris() const;
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
-	void DBG_ShowAdjacency() const;
+	void DBG_ShowTangents();
+
+	//UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
+	//void DBG_ShowAdjacency() const;
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug", meta = (EditCondition = "bSelfCollision"))
 	void DBG_ShowHash();
