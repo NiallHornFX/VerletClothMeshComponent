@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// VerletClothComponent.h - VerletClothMeshComponent Plugin - Niall Horn 2020. 
 
 #pragma once
 
@@ -12,6 +12,7 @@
 class  HashGrid; 
 struct FVerletClothConstraint;
 
+// Basic Struct for storing Particle Representation of cloth. 
 struct FVerletClothParticle
 {
 	FVerletClothParticle()
@@ -155,7 +156,7 @@ private:
 
 	void Integrate(float InSubstepTime);
 
-	static void SolveDistanceConstraint(FVerletClothParticle& ParticleA, FVerletClothParticle& ParticleB, float RestDistance, float StiffnessCoeff);
+	static void SolveDistanceConstraint(FVerletClothParticle &ParticleA, FVerletClothParticle &ParticleB, float RestDistance, float StiffnessCoeff);
 
 	void SubstepSolve();
 
@@ -204,13 +205,15 @@ private:
 	friend class  HashGrid;
 };
 
+// Inline Memember Functions - 
+
 // Square Distance Between 2 Position Vectors. 
 float UVerletClothMeshComponent::SquareDist(const FVector &A, const FVector &B)
 {
 	return FMath::Square((B.X - A.X)) + FMath::Square((B.Y - A.Y)) + FMath::Square((B.Z - A.Z));
 }
 
-// Header def ughhh might move to src. 
+// Basic Structure for storing Cloth Constraints to evaluate. 
 struct FVerletClothConstraint
 {
 	FVerletClothConstraint(FVerletClothParticle &Pt_0, FVerletClothParticle &Pt_1, UVerletClothMeshComponent *cloth)

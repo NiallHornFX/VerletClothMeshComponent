@@ -1,3 +1,4 @@
+// VerletClothMesh.cpp - VerletClothMeshComponent Plugin - Niall Horn 2020. 
 #include "Modules/ModuleInterface.h"
 #include "Modules/ModuleManager.h"
 

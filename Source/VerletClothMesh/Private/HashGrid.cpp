@@ -1,4 +1,4 @@
-
+// HashGrid.cpp - VerletClothMeshComponent Plugin - Niall Horn 2020. 
 // Implements
 #include "HashGrid.h"
 

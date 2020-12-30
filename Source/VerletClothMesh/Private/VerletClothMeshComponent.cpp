@@ -1,3 +1,4 @@
+// VerletClothMeshComponent.cpp - VerletClothMeshComponent Plugin - Niall Horn 2020. 
 // Implements
 #include "VerletClothMeshComponent.h"
 
@@ -392,7 +393,7 @@ void UVerletClothMeshComponent::ClothCollisionSelf(HashGrid *hg)
 }
 
 // Solve a single distance constraint between a pair of particles by modifying particle postions to minimize CurDist-RestLength delta. 
-void UVerletClothMeshComponent::SolveDistanceConstraint(FVerletClothParticle& ParticleA, FVerletClothParticle& ParticleB, float RestLength, float StiffnessCoeff)
+void UVerletClothMeshComponent::SolveDistanceConstraint(FVerletClothParticle &ParticleA, FVerletClothParticle &ParticleB, float RestLength, float StiffnessCoeff)
 {
 	FVector PPos_A = ParticleA.Position, PPos_B = ParticleB.Position;
 
@@ -471,12 +472,9 @@ void UVerletClothMeshComponent::DBG_ShowTangents()
 }
 
 /*
-void UVerletClothMeshComponent::DBG_ShowAdjacency() const
-{
-	// 
-}
+TODO - 
+void UVerletClothMeshComponent::DBG_ShowAdjacency() const { // }
 */
-
 
 // Create temp HashGrid using current settings, to viz in editor. 
 void UVerletClothMeshComponent::DBG_ShowHash() 

@@ -1,4 +1,4 @@
-// Verlet Cloth Mesh Plugin: VerletClothMesh.Build.cs 
+// VerletClothMesh.Build.cs - VerletClothMeshComponent Plugin - Niall Horn 2020. 
 
 using UnrealBuildTool;
 
