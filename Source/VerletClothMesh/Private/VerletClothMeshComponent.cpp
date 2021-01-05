@@ -218,6 +218,79 @@ void UVerletClothMeshComponent::BuildTriArrays()
 	}
 }
 
+void UVerletClothMeshComponent::UpdateTangents(TArray<FProcMeshTangent> &Tangents, TArray<FVector> &Normals)
+{
+	// Calculate New Tangents and Normals, per face/tri 
+	//TArray<FProcMeshTangent> FaceTang; FaceTang.AddDefaulted(smData.tri_count);
+	//TArray<FVector> FaceNorm; FaceNorm.AddDefaulted(smData.tri_count);
+
+	for (int32 t = 0; t < smData.tri_count; ++t)
+	{
+		FIntVector &tri = smData.Tris[t];
+		FVector v0, v1, v2; 
+		// v0 = smData.Pos[tri[0]], v1 = smData.Pos[tri[1]], v2 = smData.Pos[tri[2]]; Orginal Positions Test.
+		v0 = Particles[tri[0]].Position, v1 = Particles[tri[1]].Position, v2 = Particles[tri[2]].Position;
+		FVector U = v2 - v0; U.Normalize(); FVector V = v1 - v0; V.Normalize();
+		FVector Normal = U ^ V; 
+		U -= Normal * (Normal | U); U.Normalize(); // Gram-Schmidt. 
+		const bool flip = ((Normal ^ U) | V) < 0.f; // Check if TangY (BiTang) should be flipped. 
+
+		//FaceTang[t] = FProcMeshTangent(U, flip);
+		//FaceNorm[t] = Normal; 
+
+		// Set Tri Verts
+		for (int32 v = 0; v < 3; ++v)
+		{
+			Tangents[tri[v]] = FProcMeshTangent(U, flip);
+			Normals[tri[v]] = Normal; 
+		}
+	}
+
+	/*
+	// Per Vertex Get first tri Tangents as self.
+	for (int32 v = 0; v < smData.vert_count; ++v)
+	{
+		FIntVector *Tri = smData.vtris[v][0];
+
+	}
+	*/
+	
+	/*
+	for (int32 v = 0; v < smData.vert_count; ++v)
+	{
+		// Use smData Vert Shared Tri Array, 0th FIntVector as Tri to compute vectors. 
+		FIntVector *myTri = smData.vtris[v][0]; // All Vertices should have atleast one shared tri (stored as FIntVector).
+		// 3 Indices, make sure not to get self index (v) vert...
+		TArray<int32> uvind;
+		for (int32 i = 0; i < 3; ++i) if (i != v) uvind.Add(i);
+		// Get U,V Vectors and self S. 
+		//FVector U = smData.Pos[uvind[0]], V = smData.Pos[uvind[1]], S = smData.Pos[v];
+		//FVector U = smData.Pos[(*myTri)[0]], V = smData.Pos[(*myTri)[1]], S = smData.Pos[v];
+		FVector U, V; FVector S = smData.Pos[v];
+		if ((*myTri)[0] == v)
+		{
+			U = smData.Pos[(*myTri)[1]];
+			V = smData.Pos[(*myTri)[2]];
+		}
+		else if ((*myTri)[1] == v)
+		{
+			U = smData.Pos[(*myTri)[0]];
+			V = smData.Pos[(*myTri)[2]];
+		}
+		else if ((*myTri)[2] == v)
+		{
+			U = smData.Pos[(*myTri)[0]];
+			V = smData.Pos[(*myTri)[1]];
+		}
+
+		// Delta Vectors U-S | V-S
+		FVector US = U - S, VS = V - S; US.Normalize(), VS.Normalize();
+		FProcMeshTangent Tangent(US, false); Tangents[v] = Tangent;
+		FVector Normal = US ^ VS; Normals[v] = Normal;
+	}
+	*/
+}
+
 // Builds Cloth Constraints and Stores them, oppose to evaulating per frame. This should be done only once, and not per tick unless topology is changing/tearing (tbd).
 void UVerletClothMeshComponent::BuildClothConstraints()
 {
@@ -265,12 +338,19 @@ void UVerletClothMeshComponent::TickUpdateCloth()
 {
 	check(particleCount == smData.vert_count);
 
+	// Update PM Position
 	TArray<FVector> UpdtPos; UpdtPos.AddDefaulted(particleCount);
 	for (int32 i = 0; i < particleCount; ++i)
 	{
 		UpdtPos[i] = Particles[i].Position - GetComponentLocation(); // Subtract Comp Translation Off as is added to ProcMesh Verts internally. 
 	}
-	UpdateMeshSection(0, UpdtPos, smData.Normal, smData.UV, smData.Col, smData.Tang);
+	// Update PM Tangents 
+	TArray<FProcMeshTangent> tang; tang.AddDefaulted(smData.vert_count);
+	TArray<FVector> norm; norm.AddDefaulted(smData.vert_count);
+	UpdateTangents(tang, norm);
+
+	//UpdateMeshSection(0, UpdtPos, smData.Normal, smData.UV, smData.Col, smData.Tang); // Pos Only
+	UpdateMeshSection(0, UpdtPos, norm, smData.UV, smData.Col, tang);
 }
 
 

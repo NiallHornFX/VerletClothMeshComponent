@@ -150,6 +150,8 @@ private:
 
 	void TickUpdateCloth();
 
+	void UpdateTangents(TArray<FProcMeshTangent> &Tangents, TArray<FVector> &Normals); 
+
 	void ClothCollisionWorld();
 
 	void ClothCollisionSelf(HashGrid *hg);
