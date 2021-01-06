@@ -195,22 +195,21 @@ void UVerletClothMeshComponent::BuildClothState()
 
 void UVerletClothMeshComponent::BuildTriArrays()
 {
-	// Store Tris as 3 Indices within IntVector. 
+	// Store Tris as 3 Vert Indices within FIntVector. 
 	for (int32 t = 0, i = 0; t < smData.tri_count; ++t)
 	{
 		smData.Tris[t] = FIntVector(smData.Ind[i], smData.Ind[i + 1], smData.Ind[i + 2]);
 		i += 3;
 	}
 
-	// Per Vert, store array of Tris (implictlly as indices) that i'm a part of. ( O(n^2) - ok for now as only done once. ) 
-	if (smData.vtris) { delete smData.vtris; smData.vtris = nullptr; }
-	else { smData.vtris = new TArray<FIntVector*>[smData.vert_count]; }
+	// Per Vert, store array of indices of Tris from smData.Tris array, that i'm a part of. ( O(n^2) - ok for now as only done once. ) 
+	if (smData.vtris) { delete smData.vtris;} else { smData.vtris = new TArray<int32>[smData.vert_count]; }
 	for (int32 v = 0; v < smData.vert_count; ++v)
 	{
 		for (int32 t = 0; t < smData.tri_count; ++t)
 		{
-			FIntVector *t_tri = &(smData.Tris[t]);
-			if (v == t_tri->X || v == t_tri->Y || v == t_tri->Z) smData.vtris[v].Add(t_tri);
+			FIntVector t_tri = smData.Tris[t];
+			if (v == t_tri[0] || v == t_tri[1] || v == t_tri[2]) smData.vtris[v].Add(t);
 		}
 		#ifdef DEBUG_PRINT_LOG
 		UE_LOG(LogTemp, Warning, TEXT("Vertex %d Tri Count = %d"), v, smData.vtris[v].Num());
@@ -221,74 +220,45 @@ void UVerletClothMeshComponent::BuildTriArrays()
 void UVerletClothMeshComponent::UpdateTangents(TArray<FProcMeshTangent> &Tangents, TArray<FVector> &Normals)
 {
 	// Calculate New Tangents and Normals, per face/tri 
-	//TArray<FProcMeshTangent> FaceTang; FaceTang.AddDefaulted(smData.tri_count);
-	//TArray<FVector> FaceNorm; FaceNorm.AddDefaulted(smData.tri_count);
+	TArray<FProcMeshTangent> FaceTang; FaceTang.AddDefaulted(smData.tri_count);
+	TArray<FVector> FaceNorm; FaceNorm.AddDefaulted(smData.tri_count);
 
 	for (int32 t = 0; t < smData.tri_count; ++t)
 	{
 		FIntVector &tri = smData.Tris[t];
 		FVector v0, v1, v2; 
-		// v0 = smData.Pos[tri[0]], v1 = smData.Pos[tri[1]], v2 = smData.Pos[tri[2]]; Orginal Positions Test.
-		v0 = Particles[tri[0]].Position, v1 = Particles[tri[1]].Position, v2 = Particles[tri[2]].Position;
+		// v0 = smData.Pos[tri[0]], v1 = smData.Pos[tri[1]], v2 = smData.Pos[tri[2]]; // Orginal Static Mesh Positions Test.
+		v0 = Particles[tri[0]].Position, v1 = Particles[tri[1]].Position, v2 = Particles[tri[2]].Position; // Current Particle Positions. 
 		FVector U = v2 - v0; U.Normalize(); FVector V = v1 - v0; V.Normalize();
 		FVector Normal = U ^ V; 
 		U -= Normal * (Normal | U); U.Normalize(); // Gram-Schmidt. 
 		const bool flip = ((Normal ^ U) | V) < 0.f; // Check if TangY (BiTang) should be flipped. 
 
-		//FaceTang[t] = FProcMeshTangent(U, flip);
-		//FaceNorm[t] = Normal; 
-
-		// Set Tri Verts
-		for (int32 v = 0; v < 3; ++v)
-		{
-			Tangents[tri[v]] = FProcMeshTangent(U, flip);
-			Normals[tri[v]] = Normal; 
-		}
+		FaceTang[t] = FProcMeshTangent(U, flip);
+		FaceNorm[t] = Normal; 
 	}
 
-	/*
-	// Per Vertex Get first tri Tangents as self.
+	// Per Vertex, Average face normals to current vertex value. 
 	for (int32 v = 0; v < smData.vert_count; ++v)
 	{
-		FIntVector *Tri = smData.vtris[v][0];
+		// Cur Vert Tri Indices.
+		TArray<int32> &triInds = smData.vtris[v];
 
+		// Average Tangents and Normals from current vertices tris.
+		FVector Tang (0.0f), Norm(0.0f); 
+		for (int32 t = 0; t < triInds.Num(); ++t)
+		{
+			Tang += FaceTang[triInds[t]].TangentX; 
+			Norm += FaceNorm[triInds[t]];
+		}
+		//Tang.Normalize(); Norm.Normalize();
+		Tang /= static_cast<float>(triInds.Num()), Norm /= static_cast<float>(triInds.Num());
+		// Need to recalc if now vertex bitangent (Y) should be flipped ? 
+		
+		// Set Output TArrays to now Averaged/Interoplated Per Vertex Normals. 
+		Tangents[v] = FProcMeshTangent(Tang, false); Normals[v] = Norm; 
 	}
-	*/
-	
-	/*
-	for (int32 v = 0; v < smData.vert_count; ++v)
-	{
-		// Use smData Vert Shared Tri Array, 0th FIntVector as Tri to compute vectors. 
-		FIntVector *myTri = smData.vtris[v][0]; // All Vertices should have atleast one shared tri (stored as FIntVector).
-		// 3 Indices, make sure not to get self index (v) vert...
-		TArray<int32> uvind;
-		for (int32 i = 0; i < 3; ++i) if (i != v) uvind.Add(i);
-		// Get U,V Vectors and self S. 
-		//FVector U = smData.Pos[uvind[0]], V = smData.Pos[uvind[1]], S = smData.Pos[v];
-		//FVector U = smData.Pos[(*myTri)[0]], V = smData.Pos[(*myTri)[1]], S = smData.Pos[v];
-		FVector U, V; FVector S = smData.Pos[v];
-		if ((*myTri)[0] == v)
-		{
-			U = smData.Pos[(*myTri)[1]];
-			V = smData.Pos[(*myTri)[2]];
-		}
-		else if ((*myTri)[1] == v)
-		{
-			U = smData.Pos[(*myTri)[0]];
-			V = smData.Pos[(*myTri)[2]];
-		}
-		else if ((*myTri)[2] == v)
-		{
-			U = smData.Pos[(*myTri)[0]];
-			V = smData.Pos[(*myTri)[1]];
-		}
 
-		// Delta Vectors U-S | V-S
-		FVector US = U - S, VS = V - S; US.Normalize(), VS.Normalize();
-		FProcMeshTangent Tangent(US, false); Tangents[v] = Tangent;
-		FVector Normal = US ^ VS; Normals[v] = Normal;
-	}
-	*/
 }
 
 // Builds Cloth Constraints and Stores them, oppose to evaulating per frame. This should be done only once, and not per tick unless topology is changing/tearing (tbd).
@@ -304,18 +274,20 @@ void UVerletClothMeshComponent::BuildClothConstraints()
 	for (int32 p = 0; p < particleCount; ++p)
 	{
 		FVerletClothParticle &curPt = Particles[p];
-		TArray<FIntVector*> &tris = smData.vtris[p]; // Tris as Vert/Pt Indices within FIntVector.
+
 		curPt.conCount = 0;
 
 		// Each Tri im part of,
-		for (int32 t = 0; t < tris.Num(); ++t)
+		for (int32 t = 0; t < smData.vtris[p].Num(); ++t)
 		{
-			FIntVector *TriInd = tris[t];
+			// CurParticle/Vert, CurTri
+			FIntVector &TriInd = smData.Tris[smData.vtris[p][t]];
+
 			// Each Vert/Particle Index of that Tri
 			for (int32 i = 0; i < 3; ++i)
 			{
 				bool is_copy = false;
-				int32 tvi = (*TriInd)[i];
+				int32 tvi = TriInd[i];
 				FVerletClothParticle &triPt = Particles[tvi];
 				// First Check if this Constraint Pair (ID) Already Exists to avoid double constraints. 
 				int32 Cur_Tri_conID = curPt.ID * triPt.ID;

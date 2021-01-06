@@ -192,7 +192,7 @@ private:
 		TArray<FIntVector>         Tris; 
 
 		// Vert Shared Tris
-		TArray<FIntVector*> *vtris;
+		TArray<int32> *vtris;
 
 		// SM Buffer Ptrs
 		FPositionVertexBuffer   *vb;
