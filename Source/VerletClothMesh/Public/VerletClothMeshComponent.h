@@ -165,6 +165,8 @@ private:
 	//float ClothWorldCollision_AvgPosDelta();
 	//bool GetSleepState();
 
+	void ShowVelCol(); 
+
 	INLINE float SquareDist(const FVector &A, const FVector &B);
 
 	// Cloth
@@ -201,6 +203,7 @@ private:
 		FRawStaticIndexBuffer   *ib;
 
 		int32 vert_count, ind_count, adj_count, tri_count; 
+		bool has_uv, has_col; 
 	} smData;
 
 	friend struct FVerletClothConstraint;

@@ -92,6 +92,8 @@ void UVerletClothMeshComponent::SubstepSolve()
 		grid.ParticleHash();
 		ClothCollisionSelf(&grid);
 	}
+
+	//ShowVelCol();
 }
 
 
@@ -155,12 +157,16 @@ void UVerletClothMeshComponent::BuildClothState()
 	UE_LOG(LogTemp, Warning, TEXT("DBG::Static Mesh Vertex Count == %d | Index Count = %d"), smData.vert_count, smData.ind_count);
 	#endif
 
+	// Initalize smData Arrays. 
 	smData.Pos.AddDefaulted(smData.vert_count); smData.Col.AddDefaulted(smData.vert_count); smData.Normal.AddDefaulted(smData.vert_count); smData.Tang.AddDefaulted(smData.vert_count); smData.UV.AddDefaulted(smData.vert_count); 
 	smData.Ind.AddDefaulted(smData.ind_count); smData.Tris.AddDefaulted(smData.tri_count);
 	Particles.AddDefaulted(particleCount);
 
 	// Need to add checks to delete previous procedual mesh data if exists.
 	ClearAllMeshSections();
+
+	smData.has_uv = smData.smvb->GetNumTexCoords() != 0; 
+	smData.has_col = lod0->bHasColorVertexData;
 	
 	// SmData Buffer --> Array Deserialization.
 	for (int32 i = 0; i < smData.vert_count; ++i)
@@ -169,8 +175,8 @@ void UVerletClothMeshComponent::BuildClothState()
 		smData.Pos[i] = smData.vb->VertexPosition(i); // Pass Verts Without Component Location Offset initally.
 		smData.Normal[i] = smData.smvb->VertexTangentZ(i);
 		smData.Tang[i] = FProcMeshTangent(FVector(smData.smvb->VertexTangentX(i).X, smData.smvb->VertexTangentX(i).Y, smData.smvb->VertexTangentX(i).Z), false);
-		lod0->bHasColorVertexData == true ?  smData.Col[i] = smData.cvb->VertexColor(i) : smData.Col[i] = FColor(255, 255, 255);
-		smData.smvb->GetNumTexCoords() != 0 ? smData.UV[i] = smData.smvb->GetVertexUV(i, 0) : smData.UV[i] = FVector2D(0.0f); // Only support 1 UV Channel fnow.
+		smData.has_col == true ?  smData.Col[i] = smData.cvb->VertexColor(i) : smData.Col[i] = FColor(255, 255, 255);
+		smData.has_uv == true  ?  smData.UV[i] = smData.smvb->GetVertexUV(i, 0) : smData.UV[i] = FVector2D(0.0f); // Only support 1 UV Channel fnow.
 		
 		// Particle Init
 		FVector vertPtPos = GetComponentLocation() + smData.vb->VertexPosition(i); // Pts With Component Location Offset
@@ -253,8 +259,7 @@ void UVerletClothMeshComponent::UpdateTangents(TArray<FProcMeshTangent> &Tangent
 		}
 		Tang /= static_cast<float>(triInds.Num()), Norm /= static_cast<float>(triInds.Num());
 		Tang.Normalize(), Norm.Normalize();
-		// Need to recalc if now vertex bitangent (Y) should be flipped ? 
-		
+
 		// Set Output TArrays to now Averaged/Interoplated Per Vertex Normals. 
 		Tangents[v] = FProcMeshTangent(Tang, false); Normals[v] = Norm; 
 	}
@@ -274,7 +279,6 @@ void UVerletClothMeshComponent::BuildClothConstraints()
 	for (int32 p = 0; p < particleCount; ++p)
 	{
 		FVerletClothParticle &curPt = Particles[p];
-
 		curPt.conCount = 0;
 
 		// Each Tri im part of,
@@ -286,8 +290,6 @@ void UVerletClothMeshComponent::BuildClothConstraints()
 			// Each Vert/Particle Index of that Tri
 			for (int32 i = 0; i < 3; ++i)
 			{
-				FVector v_pos = Particles[smData.Tris[smData.vtris[p][t]][i]].Position;
-
 				bool is_copy = false;
 				int32 tvi = TriInd[i];
 				FVerletClothParticle &triPt = Particles[tvi];
@@ -314,17 +316,31 @@ void UVerletClothMeshComponent::TickUpdateCloth()
 
 	// Update PM Position
 	TArray<FVector> UpdtPos; UpdtPos.AddDefaulted(particleCount);
-	for (int32 i = 0; i < particleCount; ++i)
-	{
-		UpdtPos[i] = Particles[i].Position - GetComponentLocation(); // Subtract Comp Translation Off as is added to ProcMesh Verts internally. 
-	}
-	// Update PM Tangents 
-	TArray<FProcMeshTangent> tang; tang.AddDefaulted(smData.vert_count);
-	TArray<FVector> norm; norm.AddDefaulted(smData.vert_count);
-	UpdateTangents(tang, norm);
+	TArray<FColor> UpdtCol; UpdtCol.AddDefaulted(particleCount); 
+	TArray<FProcMeshTangent> UpdtTang; UpdtTang.AddDefaulted(smData.vert_count);
+	TArray<FVector> UpdtNorm; UpdtNorm.AddDefaulted(smData.vert_count);
 
-	//UpdateMeshSection(0, UpdtPos, smData.Normal, smData.UV, smData.Col, smData.Tang); // Pos Only
-	UpdateMeshSection(0, UpdtPos, norm, smData.UV, smData.Col, tang);
+	// Update Tangents from cur Particles. 
+	UpdateTangents(UpdtTang, UpdtNorm);
+
+	// Update From Particle Attribs. 
+	if (!smData.has_col)
+	{
+		for (int32 i = 0; i < particleCount; ++i)
+		{
+			UpdtPos[i] = Particles[i].Position - GetComponentLocation(); // Subtract Comp Translation Off as is added to ProcMesh Verts internally. 
+		}
+		UpdateMeshSection(0, UpdtPos, UpdtNorm, smData.UV, smData.Col, UpdtTang); // No Colour, Use SM Colour. 
+	}
+	else if (smData.has_col)
+	{
+		for (int32 i = 0; i < particleCount; ++i)
+		{
+			UpdtPos[i] = Particles[i].Position - GetComponentLocation(); // Subtract Comp Translation Off as is added to ProcMesh Verts internally. 
+			UpdtCol[i] = Particles[i].Col;
+		}
+		UpdateMeshSection(0, UpdtPos, UpdtNorm, smData.UV, UpdtCol, UpdtTang); // Use Particle Colour --> Vertex Colour. 
+	}
 }
 
 
@@ -341,11 +357,11 @@ void UVerletClothMeshComponent::Integrate(float i_St)
 		FVerletClothParticle& Particle = Particles[pt];
 
 		// Cloth Accel x''(t) = f/m (+ g) 
-		const FVector Accel = Gravity + (ClothForce / ParticleMass);
+		FVector Accel = Gravity + (ClothForce / ParticleMass);
 
 		// x(n+1) = 2x(n) - x(n-1) + a(x) * dt^2
 		// Integrate x''(n) to x(n+1) = x(n) + (x(n) - x(n-1)) + (a(x) * dt^2)
-		const FVector NewPosition = Particle.Position + (Particle.Position - Particle.PrevPosition) + (Accel * SubstepTimeSqr);
+		FVector NewPosition = Particle.Position + (Particle.Position - Particle.PrevPosition) + (Accel * SubstepTimeSqr);
 		Particle.PrevPosition = Particle.Position; Particle.Position = NewPosition;
 	}
 }
@@ -536,4 +552,16 @@ void UVerletClothMeshComponent::DBG_ShowHash()
 	HashGrid grid(this, GetWorld(), Cells_PerDim, Grid_Size, bShow_Grid);
 	grid.ParticleHash();
 	grid.VizHash(5.0f);
+}
+
+void UVerletClothMeshComponent::ShowVelCol()
+{
+	for (int32 i = 0; i < Particles.Num(); ++i)
+	{
+		FVerletClothParticle &pt = Particles[i];
+		FVector vel = pt.Position - pt.PrevPosition; vel /= St;
+		vel.Normalize();
+		pt.Col = FColor(uint8(255.f * vel.X), uint8(255.f * vel.Y), uint8(255.f * vel.Z));
+		smData.has_col = true; // Force Vertex Color Update. 
+	}
 }
