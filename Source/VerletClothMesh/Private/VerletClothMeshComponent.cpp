@@ -227,8 +227,8 @@ void UVerletClothMeshComponent::UpdateTangents(TArray<FProcMeshTangent> &Tangent
 	{
 		FIntVector &tri = smData.Tris[t];
 		FVector v0, v1, v2; 
-		// v0 = smData.Pos[tri[0]], v1 = smData.Pos[tri[1]], v2 = smData.Pos[tri[2]]; // Orginal Static Mesh Positions Test.
-		v0 = Particles[tri[0]].Position, v1 = Particles[tri[1]].Position, v2 = Particles[tri[2]].Position; // Current Particle Positions. 
+		// v0 = smData.Pos[tri[0]], v1 = smData.Pos[tri[1]], v2 = smData.Pos[tri[2]]; // Orginal Static Mesh Positions Testing.
+		v0 = Particles[tri[0]].Position, v1 = Particles[tri[1]].Position, v2 = Particles[tri[2]].Position; // Current Tri, Particle Positions. 
 		FVector U = v2 - v0; U.Normalize(); FVector V = v1 - v0; V.Normalize();
 		FVector Normal = U ^ V; 
 		U -= Normal * (Normal | U); U.Normalize(); // Gram-Schmidt. 
@@ -251,8 +251,8 @@ void UVerletClothMeshComponent::UpdateTangents(TArray<FProcMeshTangent> &Tangent
 			Tang += FaceTang[triInds[t]].TangentX; 
 			Norm += FaceNorm[triInds[t]];
 		}
-		//Tang.Normalize(); Norm.Normalize();
 		Tang /= static_cast<float>(triInds.Num()), Norm /= static_cast<float>(triInds.Num());
+		Tang.Normalize(), Norm.Normalize();
 		// Need to recalc if now vertex bitangent (Y) should be flipped ? 
 		
 		// Set Output TArrays to now Averaged/Interoplated Per Vertex Normals. 
@@ -280,12 +280,14 @@ void UVerletClothMeshComponent::BuildClothConstraints()
 		// Each Tri im part of,
 		for (int32 t = 0; t < smData.vtris[p].Num(); ++t)
 		{
-			// CurParticle/Vert, CurTri
+			// CurParticle/Vert, CurTri FIntVector. 
 			FIntVector &TriInd = smData.Tris[smData.vtris[p][t]];
 
 			// Each Vert/Particle Index of that Tri
 			for (int32 i = 0; i < 3; ++i)
 			{
+				FVector v_pos = Particles[smData.Tris[smData.vtris[p][t]][i]].Position;
+
 				bool is_copy = false;
 				int32 tvi = TriInd[i];
 				FVerletClothParticle &triPt = Particles[tvi];
