@@ -18,7 +18,7 @@ struct FVerletClothParticle
 	FVerletClothParticle()
 		: Position(0, 0, 0)
 		, PrevPosition(0, 0, 0)
-		, Accel(0, 0, 0)
+		, Force(0, 0, 0)
 		, Col(255, 255, 255, 255)
 		, ID(-1)
 		, C_idx(-1)
@@ -27,7 +27,7 @@ struct FVerletClothParticle
 	{}
 	FVector Position;
 	FVector PrevPosition;
-	FVector Accel;
+	FVector Force;
 	FColor Col;
 
 	int32 ID;
@@ -87,6 +87,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
 		FVector ClothForce;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
+		bool bUse_VolumePressureForce;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
 		float ClothGravityScale;
@@ -150,11 +153,13 @@ private:
 
 	void TickUpdateCloth();
 
-	void UpdateTangents(TArray<FProcMeshTangent> &Tangents, TArray<FVector> &Normals); 
+	void UpdateTangents(TArray<FProcMeshTangent> &out_Tangents, TArray<FVector> &out_Normals); 
 
 	void ClothCollisionWorld();
 
 	void ClothCollisionSelf(HashGrid *hg);
+
+	void VolumePressure();
 
 	void Integrate(float InSubstepTime);
 

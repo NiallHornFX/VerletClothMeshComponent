@@ -47,6 +47,7 @@ UVerletClothMeshComponent::UVerletClothMeshComponent(const FObjectInitializer& O
 	bUse_Sleeping = false;
 	bShow_Sleeping = false;
 	Sleep_DeltaThreshold = 0.025f; 
+	bUse_VolumePressureForce = false; 
 
 	// Self Collision Defaults
 	SelfColIterations = 4;
@@ -93,6 +94,8 @@ void UVerletClothMeshComponent::SubstepSolve()
 		ClothCollisionSelf(&grid);
 	}
 
+	if (bUse_VolumePressureForce) VolumePressure();
+
 	//ShowVelCol();
 }
 
@@ -131,6 +134,7 @@ void UVerletClothMeshComponent::ResetToInitalState()
 	{
 		FVector P = smData.Pos[i] + GetComponentLocation(); // Pts Pos, with Component Translation Offset.
 		Particles[i].Position = P, Particles[i].PrevPosition = P;
+		Particles[i].Force *= 0.0f; // Reset Force. 
 	}
 	TickUpdateCloth();
 }
@@ -223,7 +227,7 @@ void UVerletClothMeshComponent::BuildTriArrays()
 	}
 }
 
-void UVerletClothMeshComponent::UpdateTangents(TArray<FProcMeshTangent> &Tangents, TArray<FVector> &Normals)
+void UVerletClothMeshComponent::UpdateTangents(TArray<FProcMeshTangent> &out_Tangents, TArray<FVector> &out_Normals)
 {
 	// Calculate New Tangents and Normals, per face/tri 
 	TArray<FProcMeshTangent> FaceTang; FaceTang.AddDefaulted(smData.tri_count);
@@ -234,7 +238,8 @@ void UVerletClothMeshComponent::UpdateTangents(TArray<FProcMeshTangent> &Tangent
 		FIntVector &tri = smData.Tris[t];
 		FVector v0, v1, v2; 
 		// v0 = smData.Pos[tri[0]], v1 = smData.Pos[tri[1]], v2 = smData.Pos[tri[2]]; // Orginal Static Mesh Positions Testing.
-		v0 = Particles[tri[0]].Position, v1 = Particles[tri[1]].Position, v2 = Particles[tri[2]].Position; // Current Tri, Particle Positions. 
+		// Get Current Particle Postions that form tri for tang calc. 
+		v0 = Particles[tri[0]].Position, v1 = Particles[tri[1]].Position, v2 = Particles[tri[2]].Position;  
 		FVector U = v2 - v0; U.Normalize(); FVector V = v1 - v0; V.Normalize();
 		FVector Normal = U ^ V; 
 		U -= Normal * (Normal | U); U.Normalize(); // Gram-Schmidt. 
@@ -261,7 +266,7 @@ void UVerletClothMeshComponent::UpdateTangents(TArray<FProcMeshTangent> &Tangent
 		Tang.Normalize(), Norm.Normalize();
 
 		// Set Output TArrays to now Averaged/Interoplated Per Vertex Normals. 
-		Tangents[v] = FProcMeshTangent(Tang, false); Normals[v] = Norm; 
+		out_Tangents[v] = FProcMeshTangent(Tang, false); out_Normals[v] = Norm; 
 	}
 
 }
@@ -320,14 +325,11 @@ void UVerletClothMeshComponent::TickUpdateCloth()
 	TArray<FProcMeshTangent> UpdtTang; UpdtTang.AddDefaulted(particleCount);
 	TArray<FVector> UpdtNorm; UpdtNorm.AddDefaulted(particleCount);
 
-	// Update Tangents from cur Particles. 
+	// Update Tangents from cur Particles
 	UpdateTangents(UpdtTang, UpdtNorm);
 
-	// Store Normal Vector on Particles. 
-	for (int32 p = 0; p < particleCount; ++p)
-	{
-		Particles[p].Accel = UpdtNorm[p] * 1000.0f; ;
-	}
+	// Copy Normals for Pressure Use
+	Normals = UpdtNorm; 
 
 	// Update From Particle Attribs. 
 	if (!smData.has_col)
@@ -363,7 +365,7 @@ void UVerletClothMeshComponent::Integrate(float i_St)
 		FVerletClothParticle& Particle = Particles[pt];
 
 		// Cloth Accel x''(t) = f/m (+ g) 
-		FVector Accel = Gravity + (ClothForce / ParticleMass) + Particle.Accel;
+		FVector Accel = Gravity + ((Particle.Force + ClothForce) / ParticleMass); 
 
 		// x(n+1) = 2x(n) - x(n-1) + a(x) * dt^2
 		// Integrate x''(n) to x(n+1) = x(n) + (x(n) - x(n-1)) + (a(x) * dt^2)
@@ -498,6 +500,20 @@ void UVerletClothMeshComponent::EvalClothConstraints()
 				if (k == ConstraintIterations - 1) DrawDebugLine(world, con.Pt0.Position, con.Pt1.Position, FColor(255, 0, 0), false, St);
 			}
 		}
+	}
+}
+
+
+// Apply Pressure Force to particles to approximate volume conservation. Can be adjusted to make inflateable like beahviour.
+void UVerletClothMeshComponent::VolumePressure()
+{
+	// CalcVolumeDelta(); Derive pressure strength from this and pressureCoeff. 
+
+	// Basic testing. 
+	float pressure_coeff = 1000.0f; 
+	for (int32 p = 0; p < particleCount; ++p)
+	{
+		Particles[p].Force = Normals[p] * pressure_coeff; 
 	}
 }
 
