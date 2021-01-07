@@ -38,7 +38,7 @@ UVerletClothMeshComponent::UVerletClothMeshComponent(const FObjectInitializer& O
 	ConstraintIterations = 4;
 	bShow_Constraints = false;
 	bWorldCollision = true;
-	bSelfCollision = true;
+	bSelfCollision = false;
 	SubstepTime = 0.02f;
 	StiffnessCoefficent = 0.5f; 
 	CollisionFriction = 0.2f; 
@@ -317,11 +317,17 @@ void UVerletClothMeshComponent::TickUpdateCloth()
 	// Update PM Position
 	TArray<FVector> UpdtPos; UpdtPos.AddDefaulted(particleCount);
 	TArray<FColor> UpdtCol; UpdtCol.AddDefaulted(particleCount); 
-	TArray<FProcMeshTangent> UpdtTang; UpdtTang.AddDefaulted(smData.vert_count);
-	TArray<FVector> UpdtNorm; UpdtNorm.AddDefaulted(smData.vert_count);
+	TArray<FProcMeshTangent> UpdtTang; UpdtTang.AddDefaulted(particleCount);
+	TArray<FVector> UpdtNorm; UpdtNorm.AddDefaulted(particleCount);
 
 	// Update Tangents from cur Particles. 
 	UpdateTangents(UpdtTang, UpdtNorm);
+
+	// Store Normal Vector on Particles. 
+	for (int32 p = 0; p < particleCount; ++p)
+	{
+		Particles[p].Accel = UpdtNorm[p] * 1000.0f; ;
+	}
 
 	// Update From Particle Attribs. 
 	if (!smData.has_col)
@@ -357,7 +363,7 @@ void UVerletClothMeshComponent::Integrate(float i_St)
 		FVerletClothParticle& Particle = Particles[pt];
 
 		// Cloth Accel x''(t) = f/m (+ g) 
-		FVector Accel = Gravity + (ClothForce / ParticleMass);
+		FVector Accel = Gravity + (ClothForce / ParticleMass) + Particle.Accel;
 
 		// x(n+1) = 2x(n) - x(n-1) + a(x) * dt^2
 		// Integrate x''(n) to x(n+1) = x(n) + (x(n) - x(n-1)) + (a(x) * dt^2)
@@ -489,7 +495,7 @@ void UVerletClothMeshComponent::EvalClothConstraints()
 		{
 			SolveDistanceConstraint(con.Pt0, con.Pt1, con.restLength, StiffnessCoefficent);
 			if (bShow_Constraints) {
-				if (k == ConstraintIterations - 1) DrawDebugLine(world, con.Pt0.Position, con.Pt1.Position, FColor(255, 0, 0), false, Dt * 2.0f);
+				if (k == ConstraintIterations - 1) DrawDebugLine(world, con.Pt0.Position, con.Pt1.Position, FColor(255, 0, 0), false, St);
 			}
 		}
 	}

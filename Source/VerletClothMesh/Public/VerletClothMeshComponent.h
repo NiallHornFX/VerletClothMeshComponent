@@ -98,16 +98,16 @@ public:
 		float Sleep_DeltaThreshold;
 
 	// VerletCloth - Props - Self Collision 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Self Collision", meta = (ClampMin = "1", ClampMax = "8"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "1", ClampMax = "8"))
 		int32 SelfColIterations;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Self Collision", meta = (ClampMin = "0", ClampMax = "100"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "0", ClampMax = "100"))
 		int32 Cells_PerDim;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cloth Self Collision", meta = (UIMin = "1.0", UIMax = "10000.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cloth Simulation", meta = (UIMin = "1.0", UIMax = "10000.0"))
 		float Grid_Size;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Self Collision")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
 		bool bShow_Grid;
 
 	// VerletCloth - Props - Cloth Simulation Debug
@@ -172,6 +172,8 @@ private:
 	// Cloth
 	TArray<FVerletClothParticle> Particles;
 	TArray<FVerletClothConstraint> Constraints; 
+	TArray<FVector> Normals; 
+
 
 	// State 
 	bool clothStateExists, world_collided;
