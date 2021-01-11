@@ -82,7 +82,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cloth Simulation", meta = (ClampMin = "0.05", ClampMax = "0.99"))
 		float StiffnessCoefficent;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "0.0", ClampMax = "1.0", EditCondition = "bEnableCollision"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "0.0", ClampMax = "1.0", EditCondition = "bWorldCollision"))
 		float CollisionFriction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
@@ -99,6 +99,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (EditCondition = "bUse_Sleeping"))
 		float Sleep_DeltaThreshold;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "2", ClampMax = "1000"))
+		int32 VolSample_Count; 
 
 	// VerletCloth - Props - Self Collision 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "1", ClampMax = "8"))
@@ -142,6 +145,9 @@ public:
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug", meta = (EditCondition = "bSelfCollision"))
 	void DBG_ShowHash();
 
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
+	void DBG_CalcVol();
+
 private:
 	// Internal Solver Methods
 
@@ -159,8 +165,6 @@ private:
 
 	void ClothCollisionSelf(HashGrid *hg);
 
-	void VolumePressure();
-
 	void Integrate(float InSubstepTime);
 
 	static void SolveDistanceConstraint(FVerletClothParticle &ParticleA, FVerletClothParticle &ParticleB, float RestDistance, float StiffnessCoeff);
@@ -172,12 +176,22 @@ private:
 
 	void ShowVelCol(); 
 
+	// Volume Methods - 
+
+	void GetVolSamplePts(int32 n); 
+
+	float CalcClothVolume(); // Using Sample Pts. 
+
+	void VolumePressure();
+
 	INLINE float SquareDist(const FVector &A, const FVector &B);
 
 	// Cloth
 	TArray<FVerletClothParticle> Particles;
 	TArray<FVerletClothConstraint> Constraints; 
 	TArray<FVector> Normals; 
+	TArray<FVerletClothParticle*> VolSamplePts;
+	float restVolume; 
 
 
 	// State 

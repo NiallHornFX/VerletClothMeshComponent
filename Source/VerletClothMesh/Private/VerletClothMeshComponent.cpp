@@ -48,6 +48,7 @@ UVerletClothMeshComponent::UVerletClothMeshComponent(const FObjectInitializer& O
 	bShow_Sleeping = false;
 	Sleep_DeltaThreshold = 0.025f; 
 	bUse_VolumePressureForce = false; 
+	VolSample_Count = 50;
 
 	// Self Collision Defaults
 	SelfColIterations = 4;
@@ -94,7 +95,16 @@ void UVerletClothMeshComponent::SubstepSolve()
 		ClothCollisionSelf(&grid);
 	}
 
-	if (bUse_VolumePressureForce) VolumePressure();
+	// Testing
+	float curVolume = CalcClothVolume();
+	UE_LOG(LogType, Warning, TEXT("Current Volume %f vs Orginal Rest Volume %f"), curVolume, restVolume);
+	if (bUse_VolumePressureForce && curVolume < restVolume)
+	{
+		UE_LOG(LogType, Warning, TEXT("!!! VOLUME LOSS - Applying Pressure Force !!!"));
+		VolumePressure();
+	}
+
+
 
 	//ShowVelCol();
 }
@@ -195,6 +205,10 @@ void UVerletClothMeshComponent::BuildClothState()
 	CreateMeshSection(0, smData.Pos, smData.Ind, smData.Normal, smData.UV, smData.Col, smData.Tang, false);
 	bShowStaticMesh = false; sm->SetVisibility(bShowStaticMesh);
 	clothStateExists = true;
+
+	// Get Volume Sample Pts, and Calc Orginal Volume.
+	GetVolSamplePts(VolSample_Count);
+	restVolume = CalcClothVolume();
 
 	// Build Tri Array and Per Vert Shared Tri Array
 	BuildTriArrays();
@@ -587,3 +601,75 @@ void UVerletClothMeshComponent::ShowVelCol()
 		smData.has_col = true; // Force Vertex Color Update. 
 	}
 }
+
+
+
+// For m random sample particles of cloth mesh, approximate the volume using average p2p distances. 
+// for m volSamplePts, calc average distance of m to each particle. 
+// then average the m volSamplePts average distances, to get a total average distance, use this as a volume approximation.
+// only sqrt the final total average distance. 
+float UVerletClothMeshComponent::CalcClothVolume()
+{
+	if (VolSamplePts.Num() == 0) return -1.0f; 
+
+	float tot_avg_dist = 0.0f; 
+
+	for (int32 sp = 0; sp < VolSamplePts.Num(); ++sp)
+	{
+		FVerletClothParticle *Sp = VolSamplePts[sp];
+		float sp_avg_dist = 0.0f; 
+
+		for (int32 p = 0; p < particleCount; ++p)
+		{
+			FVerletClothParticle *Pt = &Particles[p];
+
+			sp_avg_dist += SquareDist(Sp->Position, Pt->Position);
+		}
+		sp_avg_dist /= static_cast<float>(particleCount);
+		tot_avg_dist += sp_avg_dist;
+	}
+	tot_avg_dist /= static_cast<float>(VolSamplePts.Num());
+	tot_avg_dist = FMath::Sqrt(tot_avg_dist);
+	UE_LOG(LogTemp, Warning, TEXT("Total Average Particle Distance = %f"), tot_avg_dist);
+
+	return tot_avg_dist; 
+
+}
+
+
+void UVerletClothMeshComponent::GetVolSamplePts(int32 n)
+{
+	UWorld *world = GetWorld();
+	// Clear Previous Sample Pts (eg, If mesh changed)
+	if (VolSamplePts.Num() != 0) VolSamplePts.Reset();
+
+	// Get n random sample Pts. 
+	for (int32 s = 0; s < n; ++s)
+	{
+		FRandomStream rng_samp(s);
+		int32 ridx = rng_samp.RandRange(0, particleCount-1);
+		VolSamplePts.Add(&Particles[ridx]);
+	}
+	// Remove Dupes if any. 
+	for (int32 i = 0; i < VolSamplePts.Num(); ++i)
+	{
+		FVerletClothParticle *a = VolSamplePts[i];
+		for (int32 j = i + 1; j < VolSamplePts.Num(); ++j)
+		{
+			FVerletClothParticle *b = VolSamplePts[j];
+			if (a->ID == b->ID) VolSamplePts.RemoveAt(j);
+		}
+	}
+
+	// Calculate Ratio of total sample pts count vs orginal mesh vert/particle count. 
+	float samp_r = float(VolSamplePts.Num()) / float(particleCount);
+
+	// DBG: Show Volume Sample Pts
+	#ifdef DEBUG_PRINT_LOG
+	UE_LOG(LogTemp, Warning, TEXT("Sample Pt Count == %d, Sample Pt : Mesh Vert Ratio == %f"), VolSamplePts.Num(), samp_r);
+	#endif
+	for (int32 sp = 0; sp < VolSamplePts.Num(); ++sp) DrawDebugSphere(world, VolSamplePts[sp]->Position, ParticleRadius * 1.25f, 3, FColor(255, 0, 0, 255), false, 5.0f);
+}
+
+
+void UVerletClothMeshComponent::DBG_CalcVol() { GetVolSamplePts(50); CalcClothVolume(); }

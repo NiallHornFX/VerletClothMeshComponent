@@ -22,7 +22,6 @@ the simulation settings, while the solver ticks in the editor viewport, or run t
 ## Known Issues
 This project is a self educational project, I am still working on refinement's in a separate private repo -
 * Performance with high resolution meshes is not ideal, theres no use of Multi-Threading or GPU Compute based acceleration yet. 
-* The Tangents (and Normals) are not re-calculated per frame to update the procedural mesh sections yet. This will be fixed soon. 
 * Self Collisions are still a work in progress, and no doubt will need to use a more complex projection step than currently implemented, to be more temporally stable.  
 * Closed meshes are not correctly solved currently due to the lack of volumetric constraints, i'm working on a volume preservation method described briefly above. 
 * If you change the Static Cloth Mesh within the component once BuildClothState has been invoked, the plugin will crash, this is due to the Static Mesh -> Procedural Mesh creation not been refreshed currently.
