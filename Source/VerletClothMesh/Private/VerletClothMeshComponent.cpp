@@ -96,15 +96,8 @@ void UVerletClothMeshComponent::SubstepSolve()
 	}
 
 	// Testing
-	float curVolume = CalcClothVolume();
-	UE_LOG(LogType, Warning, TEXT("Current Volume %f vs Orginal Rest Volume %f"), curVolume, restVolume);
-	if (bUse_VolumePressureForce && curVolume < restVolume)
-	{
-		UE_LOG(LogType, Warning, TEXT("!!! VOLUME LOSS - Applying Pressure Force !!!"));
-		VolumePressure();
-	}
 
-
+	VolumePreservation();
 
 	//ShowVelCol();
 }
@@ -328,7 +321,7 @@ void UVerletClothMeshComponent::BuildClothConstraints()
 	}
 }
 
-// Rebuild Mesh Section 0, within tick with updated particle positions.  ToDo Update Normals and Tangents ...
+// Rebuild Procedual Mesh Section 0, within tick with updated particle attributes if present.
 void UVerletClothMeshComponent::TickUpdateCloth()
 {
 	check(particleCount == smData.vert_count);
@@ -518,90 +511,42 @@ void UVerletClothMeshComponent::EvalClothConstraints()
 }
 
 
-// Apply Pressure Force to particles to approximate volume conservation. Can be adjusted to make inflateable like beahviour.
-void UVerletClothMeshComponent::VolumePressure()
-{
-	// CalcVolumeDelta(); Derive pressure strength from this and pressureCoeff. 
+// --- Volume Preserivation Methods ---
 
-	// Basic testing. 
-	float pressure_coeff = 1000.0f; 
-	for (int32 p = 0; p < particleCount; ++p)
-	{
-		Particles[p].Force = Normals[p] * pressure_coeff; 
-	}
-}
-
-// Debug Function to show Particle Radii in the Editor.
-void UVerletClothMeshComponent::DBG_ShowParticles() const
+// Get Random Sample Points from input particle/mesh verts to use to approximate volume. 
+void UVerletClothMeshComponent::GetVolSamplePts(int32 n)
 {
 	UWorld *world = GetWorld();
-	for (const FVerletClothParticle &pt : Particles)
+	// Clear Previous Sample Pts (eg, If mesh changed)
+	if (VolSamplePts.Num() != 0) VolSamplePts.Reset();
+
+	// Get n random sample Pts. 
+	for (int32 s = 0; s < n; ++s)
 	{
-		DrawDebugSphere(world, pt.Position, ParticleRadius, 3, FColor(255, 0, 0, 1), false, 3.0f);
+		FRandomStream rng_samp(s);
+		int32 ridx = rng_samp.RandRange(0, particleCount - 1);
+		VolSamplePts.Add(&Particles[ridx]);
 	}
-}
-
-void UVerletClothMeshComponent::DBG_ShowTris() const
-{
-	// For Now just show Indv Spheres per Tri, to validate storing Tris implicilty by there vert indices only within a FIntVector ...
-	UWorld *world = GetWorld();
-	for (int32 i = 0; i < smData.tri_count; ++i)
+	// Remove Dupes if any. 
+	for (int32 i = 0; i < VolSamplePts.Num(); ++i)
 	{
-		FRandomStream rng_r(i), rng_g(i + 123), rng_b(i + 4567);
-		int32 r = static_cast<int32>(rng_r.FRandRange(0, 255)), g = static_cast<int32>(rng_g.FRandRange(0, 255)), b = static_cast<int32>(rng_b.FRandRange(0, 255));
-		FVector cPos = (smData.Pos[smData.Tris[i].X] + smData.Pos[smData.Tris[i].Y] + smData.Pos[smData.Tris[i].Z]) * 0.333f; 
-		cPos += GetComponentLocation();
-		DrawDebugSphere(world, cPos, ParticleRadius * 1.25f, 3, FColor(r, g, b, 255), false, 5.0f);
+		FVerletClothParticle *a = VolSamplePts[i];
+		for (int32 j = i + 1; j < VolSamplePts.Num(); ++j)
+		{
+			FVerletClothParticle *b = VolSamplePts[j];
+			if (a->ID == b->ID) VolSamplePts.RemoveAt(j);
+		}
 	}
+
+	// Calculate Ratio of total sample pts count vs orginal mesh vert/particle count. 
+	float samp_r = float(VolSamplePts.Num()) / float(particleCount);
+
+	// DBG: Show Volume Sample Pts
+	#ifdef DEBUG_PRINT_LOG
+	UE_LOG(LogTemp, Warning, TEXT("Sample Pt Count == %d, Sample Pt : Mesh Vert Ratio == %f"), VolSamplePts.Num(), samp_r);
+	#endif
+	for (int32 sp = 0; sp < VolSamplePts.Num(); ++sp) DrawDebugSphere(world, VolSamplePts[sp]->Position, ParticleRadius * 1.25f, 3, FColor(255, 0, 0, 255), false, 5.0f);
 }
-
-// Debug Show Tangents of current Procedual Mesh State.
-void UVerletClothMeshComponent::DBG_ShowTangents()
-{
-	UWorld *world = GetWorld();
-	FVector compLoc = GetComponentLocation();
-	float scale = 10.0f;
-
-	for (int32 i = 0; i < smData.vert_count; ++i)
-	{
-		FProcMeshVertex &pmv = GetProcMeshSection(0)->ProcVertexBuffer[i];
-		FVector Tang = pmv.Tangent.TangentX; FVector Norm = FVector(pmv.Normal.X, pmv.Normal.Y, pmv.Normal.Z);
-		FVector BiTang = Norm ^ Tang;
-		FVector vPos = pmv.Position + compLoc; 
-		// Draw Tangent
-		DrawDebugLine(world, vPos, vPos + (Tang * scale), FColor(255, 0, 0), false, 5.0f);
-		// Draw Normal
-		DrawDebugLine(world, vPos, vPos + (Norm * scale), FColor(0, 0, 255), false, 5.0f);
-		// Draw BiTang
-		DrawDebugLine(world, vPos, vPos + (BiTang * scale), FColor(0, 255, 0), false, 5.0f);
-	}
-}
-
-/*
-TODO - 
-void UVerletClothMeshComponent::DBG_ShowAdjacency() const { // }
-*/
-
-// Create temp HashGrid using current settings, to viz in editor. 
-void UVerletClothMeshComponent::DBG_ShowHash() 
-{
-	HashGrid grid(this, GetWorld(), Cells_PerDim, Grid_Size, bShow_Grid);
-	grid.ParticleHash();
-	grid.VizHash(5.0f);
-}
-
-void UVerletClothMeshComponent::ShowVelCol()
-{
-	for (int32 i = 0; i < Particles.Num(); ++i)
-	{
-		FVerletClothParticle &pt = Particles[i];
-		FVector vel = pt.Position - pt.PrevPosition; vel /= St;
-		vel.Normalize();
-		pt.Col = FColor(uint8(255.f * vel.X), uint8(255.f * vel.Y), uint8(255.f * vel.Z));
-		smData.has_col = true; // Force Vertex Color Update. 
-	}
-}
-
 
 
 // For m random sample particles of cloth mesh, approximate the volume using average p2p distances. 
@@ -633,43 +578,109 @@ float UVerletClothMeshComponent::CalcClothVolume()
 	UE_LOG(LogTemp, Warning, TEXT("Total Average Particle Distance = %f"), tot_avg_dist);
 
 	return tot_avg_dist; 
-
 }
 
 
-void UVerletClothMeshComponent::GetVolSamplePts(int32 n)
+// Apply Pressure Force to particles to approximate Volume Preservation. Can be adjusted to make inflateable like beahviour.
+// mode = 0 Applies Pressure Force to Particle Force, mode = 1 removes Pressure Force from Particles. 
+void UVerletClothMeshComponent::VolumePressureForce(int32 mode)
+{
+	if (mode == 0) // Apply Pressure Force on Particles. 
+	{
+		float pressure_coeff = 1000.0f;
+		for (int32 p = 0; p < particleCount; ++p) Particles[p].Force = Normals[p] * ((-deltaVolume) * pressure_coeff);
+		return;
+	}
+	else if (mode == 1) // Zero/Remove Accumulated Pressure Force on Particles. 
+	{
+		for (int32 p = 0; p < particleCount; ++p) Particles[p].Force *= 0.0f;
+		return;
+	}
+
+	UE_LOG(LogType, Error, TEXT("VolumePressureForce::Incorrect Mode Selected, 0 = Apply Pressure Force | 1 = Remove Pressure Force"));
+}
+
+// Try to preserve rest volume of cloth mesh, called per Substep. 
+void UVerletClothMeshComponent::VolumePreservation()
+{
+	// Calc Volume Delta 
+	curVolume = CalcClothVolume();
+	deltaVolume = curVolume - restVolume;
+
+	float deltaVolumeThreshold = 0.5f;
+
+	UE_LOG(LogType, Warning, TEXT("Current Volume %f vs Orginal Rest Volume %f"), curVolume, restVolume);
+	UE_LOG(LogType, Warning, TEXT("Volume Delta = %f"), deltaVolume);
+
+	if (bUse_VolumePressureForce && FMath::Abs(deltaVolume) > deltaVolumeThreshold)
+	{
+		UE_LOG(LogType, Warning, TEXT("!!! DBG :: VOLUME LOSS - Applying Pressure Force !!!"));
+		VolumePressureForce(0);
+	}
+	else if (bUse_VolumePressureForce && FMath::Abs(deltaVolume) <= deltaVolumeThreshold)  
+	{
+		// 0 Particle Force to stop accumulated volume force.
+		VolumePressureForce(1);
+	}
+}
+
+// --- Debug Draw In Editor Methods  ---
+
+// Draw Particles to viz there positions and radii in the editor. 
+void UVerletClothMeshComponent::DBG_ShowParticles() const
 {
 	UWorld *world = GetWorld();
-	// Clear Previous Sample Pts (eg, If mesh changed)
-	if (VolSamplePts.Num() != 0) VolSamplePts.Reset();
-
-	// Get n random sample Pts. 
-	for (int32 s = 0; s < n; ++s)
+	for (const FVerletClothParticle &pt : Particles)
 	{
-		FRandomStream rng_samp(s);
-		int32 ridx = rng_samp.RandRange(0, particleCount-1);
-		VolSamplePts.Add(&Particles[ridx]);
+		DrawDebugSphere(world, pt.Position, ParticleRadius, 3, FColor(255, 0, 0, 1), false, 3.0f);
 	}
-	// Remove Dupes if any. 
-	for (int32 i = 0; i < VolSamplePts.Num(); ++i)
-	{
-		FVerletClothParticle *a = VolSamplePts[i];
-		for (int32 j = i + 1; j < VolSamplePts.Num(); ++j)
-		{
-			FVerletClothParticle *b = VolSamplePts[j];
-			if (a->ID == b->ID) VolSamplePts.RemoveAt(j);
-		}
-	}
-
-	// Calculate Ratio of total sample pts count vs orginal mesh vert/particle count. 
-	float samp_r = float(VolSamplePts.Num()) / float(particleCount);
-
-	// DBG: Show Volume Sample Pts
-	#ifdef DEBUG_PRINT_LOG
-	UE_LOG(LogTemp, Warning, TEXT("Sample Pt Count == %d, Sample Pt : Mesh Vert Ratio == %f"), VolSamplePts.Num(), samp_r);
-	#endif
-	for (int32 sp = 0; sp < VolSamplePts.Num(); ++sp) DrawDebugSphere(world, VolSamplePts[sp]->Position, ParticleRadius * 1.25f, 3, FColor(255, 0, 0, 255), false, 5.0f);
 }
 
+// Draw Tangents of current Procedual Mesh state. 
+void UVerletClothMeshComponent::DBG_ShowTangents()
+{
+	UWorld *world = GetWorld();
+	FVector compLoc = GetComponentLocation();
+	float scale = 10.0f;
 
-void UVerletClothMeshComponent::DBG_CalcVol() { GetVolSamplePts(50); CalcClothVolume(); }
+	for (int32 i = 0; i < smData.vert_count; ++i)
+	{
+		FProcMeshVertex &pmv = GetProcMeshSection(0)->ProcVertexBuffer[i];
+		FVector Tang = pmv.Tangent.TangentX; FVector Norm = FVector(pmv.Normal.X, pmv.Normal.Y, pmv.Normal.Z);
+		FVector BiTang = Norm ^ Tang;
+		FVector vPos = pmv.Position + compLoc;
+		// Draw Tangent
+		DrawDebugLine(world, vPos, vPos + (Tang * scale), FColor(255, 0, 0), false, 5.0f);
+		// Draw Normal
+		DrawDebugLine(world, vPos, vPos + (Norm * scale), FColor(0, 0, 255), false, 5.0f);
+		// Draw BiTang
+		DrawDebugLine(world, vPos, vPos + (BiTang * scale), FColor(0, 255, 0), false, 5.0f);
+	}
+}
+
+/*
+TODO -
+// Draw Shared Vertices per Vertex for adjacency viz
+void UVerletClothMeshComponent::DBG_ShowAdjacency() const { // }
+*/
+
+// Create temp HashGrid using current settings, to viz Spatial Hash Locallity of particles in editor. 
+void UVerletClothMeshComponent::DBG_ShowHash()
+{
+	HashGrid grid(this, GetWorld(), Cells_PerDim, Grid_Size, bShow_Grid);
+	grid.ParticleHash();
+	grid.VizHash(5.0f);
+}
+
+void UVerletClothMeshComponent::ShowVelCol()
+{
+	for (int32 i = 0; i < Particles.Num(); ++i)
+	{
+		FVerletClothParticle &pt = Particles[i];
+		FVector vel = pt.Position - pt.PrevPosition; vel /= St;
+		vel.Normalize();
+		pt.Col = FColor(uint8(255.f * vel.X), uint8(255.f * vel.Y), uint8(255.f * vel.Z));
+		smData.has_col = true; // Force PM Vertex Color Update. 
+	}
+}
+

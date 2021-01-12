@@ -12,7 +12,7 @@
 class  HashGrid; 
 struct FVerletClothConstraint;
 
-// Basic Struct for storing Particle Representation of cloth. 
+// --- VerletClothParticle - Basic Struct for storing Particle Representation of cloth. ---
 struct FVerletClothParticle
 {
 	FVerletClothParticle()
@@ -44,20 +44,20 @@ class VERLETCLOTHMESH_API UVerletClothMeshComponent : public UProceduralMeshComp
 public:
 	UVerletClothMeshComponent(const FObjectInitializer& ObjectInitializer);
 
-	// UActorComponent Overrides 
+	// --- UActorComponent Overrides ---
 	void OnRegister() override; 
 	void TickComponent (float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction *ThisTickFunction) override;
 
 	// Properties
 
-	// Verlet Cloth - Props - Mesh Setup
+	// --- Verlet Cloth - Properties - Cloth Setup ---
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Static Mesh")
 	UStaticMeshComponent *sm;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
 	bool bShowStaticMesh;
 
-	// VerletCloth - Props - Cloth Simulation
+	// --- VerletCloth - Properties - Cloth Simulation ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
 		bool bSimulate;
 
@@ -103,7 +103,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "2", ClampMax = "1000"))
 		int32 VolSample_Count; 
 
-	// VerletCloth - Props - Self Collision 
+	// --- VerletCloth - Properties - Self Collision ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "1", ClampMax = "8"))
 		int32 SelfColIterations;
 
@@ -116,25 +116,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
 		bool bShow_Grid;
 
-	// VerletCloth - Props - Cloth Simulation Debug
+	// --- VerletCloth - Properties - Cloth Simulation Debug ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation Debug", meta = (EditCondition = "bUse_Sleeping"))
 		bool bShow_Sleeping;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation Debug")
 		bool bShow_Constraints;
 
-	// Component UFunctions 
+	// --- Component UFunctions - Cloth Setup ---
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation")
 	void BuildClothState();
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation")
 	void ResetToInitalState();
 
+	// --- Component UFunctions - Debug Editor Draw ---
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
 	void DBG_ShowParticles() const;
-
-	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
-	void DBG_ShowTris() const;
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
 	void DBG_ShowTangents();
@@ -145,12 +143,8 @@ public:
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug", meta = (EditCondition = "bSelfCollision"))
 	void DBG_ShowHash();
 
-	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Cloth Simulation Debug")
-	void DBG_CalcVol();
-
 private:
-	// Internal Solver Methods
-
+	// --- Cloth Solver Methods ---
 	void BuildTriArrays();
 
 	void BuildClothConstraints();
@@ -176,33 +170,35 @@ private:
 
 	void ShowVelCol(); 
 
-	// Volume Methods - 
+	// Volume Methods
 
 	void GetVolSamplePts(int32 n); 
 
 	float CalcClothVolume(); // Using Sample Pts. 
 
-	void VolumePressure();
+	void VolumePressureForce(int32 mode = 0);
+
+	void VolumePreservation(); // Per Substep. 
 
 	INLINE float SquareDist(const FVector &A, const FVector &B);
 
-	// Cloth
+	// --- Cloth Data ---
 	TArray<FVerletClothParticle> Particles;
 	TArray<FVerletClothConstraint> Constraints; 
 	TArray<FVector> Normals; 
 	TArray<FVerletClothParticle*> VolSamplePts;
-	float restVolume; 
+	float restVolume, curVolume, deltaVolume; 
+	int32 particleCount;
 
-
-	// State 
+	// --- State Flags --- 
 	bool clothStateExists, world_collided;
-	int32 particleCount; 
 
-	// Simulation Settings
+
+	// --- Simulation Settings ---
 	float Dt, At, St; // Delta, Accumulated, Substep Time
 	float pr2sqr;     // 2ParticleRadius^2
 
-	// Static Mesh Data
+	// --- Static Mesh Data ---
 	struct
 	{
 		// SM Deserialized
@@ -231,13 +227,15 @@ private:
 	friend class  HashGrid;
 };
 
-// Inline Memember Functions - 
+// --- Inline Memember Function Implementations --- 
 
 // Square Distance Between 2 Position Vectors. 
 float UVerletClothMeshComponent::SquareDist(const FVector &A, const FVector &B)
 {
 	return FMath::Square((B.X - A.X)) + FMath::Square((B.Y - A.Y)) + FMath::Square((B.Z - A.Z));
 }
+
+// --- VerletClothConstraint Struct --- 
 
 // Basic Structure for storing Cloth Constraints to evaluate. 
 struct FVerletClothConstraint
