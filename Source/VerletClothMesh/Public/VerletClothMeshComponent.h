@@ -91,6 +91,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
 		bool bUse_VolumePressureForce;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "2", ClampMax = "1000", EditCondition = "bUse_VolumePressureForce"))
+		int32 VolSample_Count;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (EditCondition = "bUse_VolumePressureForce"))
+		float VolPressure_Coefficient;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation")
 		float ClothGravityScale;
 
@@ -99,9 +105,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (EditCondition = "bUse_Sleeping"))
 		float Sleep_DeltaThreshold;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "2", ClampMax = "1000"))
-		int32 VolSample_Count; 
 
 	// --- VerletCloth - Properties - Self Collision ---
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cloth Simulation", meta = (ClampMin = "1", ClampMax = "8"))

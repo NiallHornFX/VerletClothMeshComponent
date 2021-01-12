@@ -48,6 +48,7 @@ UVerletClothMeshComponent::UVerletClothMeshComponent(const FObjectInitializer& O
 	bShow_Sleeping = false;
 	Sleep_DeltaThreshold = 0.025f; 
 	bUse_VolumePressureForce = false; 
+	VolPressure_Coefficient = 1000.0f; 
 	VolSample_Count = 50;
 
 	// Self Collision Defaults
@@ -588,7 +589,7 @@ void UVerletClothMeshComponent::VolumePressureForce(int32 mode)
 	if (mode == 0) // Apply Pressure Force on Particles. 
 	{
 		float pressure_coeff = 1000.0f;
-		for (int32 p = 0; p < particleCount; ++p) Particles[p].Force = Normals[p] * ((-deltaVolume) * pressure_coeff);
+		for (int32 p = 0; p < particleCount; ++p) Particles[p].Force = Normals[p] * ((-deltaVolume) * VolPressure_Coefficient);
 		return;
 	}
 	else if (mode == 1) // Zero/Remove Accumulated Pressure Force on Particles. 
