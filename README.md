@@ -1,37 +1,56 @@
-# Verlet Cloth Mesh Component Plugin - Implemented in Unreal Engine 4
+# Verlet Cloth Mesh Component 
 
-![Cloth Volume Preservation Demo GIF](Doc/VerletClothVolumePreservation.gif)
+## A PBD Cloth Solver Plugin for Unreal Engine 4
 
-## Implementation Overview 
-The implementation is heavily based on the [Advanced Character Physics](https://www.cs.cmu.edu/afs/cs/academic/class/15462-s13/www/lec_slides/Jakobsen.pdf) Paper by Thomas Jakobsen [1] where cloth is discretized as a set of discrete particle positions from some input cloth manifold. In my case I chose to implement the ability to simulate cloth of arbitrary triangle mesh from a Static Mesh input, where the shared edges of vertices form the constraints connecting the cloth mesh together. These constraints are then projecting particle pair positions, to try and minimize the delta of there current distance back to the rest distance (derived from distance of the original vertices of the input static mesh) of the segment between them by some user stiffness coefficient k. It is also inspired by the Cable Component plugin which ships with Unreal Engine, that is solving a similar problem, but for a 1 Dimensional procedural cable. I Implemented this based on a subclassed Procedural Mesh Component, that both performs the simulation and rendering (via Procedural Mesh Sections) of the cloth mesh. 
+<img src="Doc/gif_ClothVolumePreservation.gif" alt="Cloth Volume Preservation Demo GIF" style="zoom:50%;" />
 
-The discretization is not unlike a simple Mass Spring based cloth model, however it differs in terms of how the equations of motion are solved, specially integration uses the velocity-less Verlet method oppose to something like the Forward (Explicit) Euler method. Unlike Euler where we use Force to integrate first derivative's (acceleration (a = f/m) to velocity, and velocity to position), Verlet can be seen as integrating second derivative's ie from Acceleration directly to position, thus velocity is implicitly calculated using the stored previous (x(n-1)) and current (x(n)) position to integrate the new (x(n+1)) position of each particle.
+#### NOTE: This project was developed in 2020-2021 for UE4. If I get time I do plan to refactor into UE5, this will require some changes, including utilising the RDG. 
 
-Also Oppose to using spring and damper forces to resolve constraints, we assume the particles are connected by springs of infinite stiffness and directly project there positions to satisfy constraints. However to satisfy constraint's of such a connected system, a Gauss-Seidel relaxation like approach is used, where constraints are projected iteratively, over multiple iterations to allow convergence to a (mostly) satisfied solution where the effects of constraints on particles on constraints (and so on) can be distributed throughout the system, minimizing the position delta's of pairs of particles along each constraint segment and thus creating cloth which can deform and crease as expected.  A similar approach is used for self collision's, however we are minimizing the intersection distance of particle radii instead of position deltas along triangle edge segments. For Self Collision I implemented a basic Spatial Hash Grid to accelerate the Particle-Particle distance and radii intersection checking code to remove the O(n^2) bottleneck of such an approach. The Spatial Hash function is based on the presentation from NVIDIA's Simon Green [NVIDIA's Simon Green talk](http://developer.download.nvidia.com/presentations/2008/GDC/GDC08_ParticleFluids.pdf) [2].
+This is a personal project from 2020-21 which contains an Unreal Engine 4 plugin that implements a velocity-less Verlet based Position Based Dynamics (PBD) cloth solver. The implementation is heavily based on the [Advanced Character Physics](https://www.cs.cmu.edu/afs/cs/academic/class/15462-s13/www/lec_slides/Jakobsen.pdf) Paper by Thomas Jakobsen [1]. This allows for a very high performance cloth solver, with some trade-offs such as timestep dependence. 
 
-It also supports "Pseudo" Soft Bodies using a Volume Preservation force (See GIF above), to try and maintain its original rest volume of the cloth body. This feature can be exploited to create inflatable like effects. Note that the volume is current approximated using average particle distances based on random sample positions. This seems to work well enough and is likely more efficient than calculating a more explicit form of volume based on the mesh triangles themselves. 
+Cloth is discretized as a set of particle positions from some input cloth triangle mesh. Currently distance constraints are built based off the meshes edges and thus manifold and relatively good input topology is needed for clean results. Both Self and World collision constraints are implemented; self collisions utilise a spatial hash grid as described in [2] to only search nearby neighbour particles, while world collisions utilise the engines abstracted Physx or Chaos implementation to search for particle-world collisions by shape overlaps.
 
-I also added a bunch of Debug Functions to visualize the particle discretizations, the Hash Grid spatial locality on the particles and so forth inside the editor. 
+While distance constraints are constructed only once, self and world collision constraints are updated per tick. Both collision constraints utilise inequality constraints, which aim to be satisifed via projection in order to resolve themselves. Currently I implement a Gauss-Seidel like relaxation method for solving all constraints. Note that collision constraints are projected separately to the distance constraints, this is not accurate to the paper, but was done to reduce branching based on the currently enabled constraints. 
+I most likely will remove this in-favour of a unified solver later, as it reduces convergence. 
+
+This plugin utilises Epic's own Procedural Mesh Component with the 'VerletClothMeshComponent' derived from it. This allows us to efficiently update the cloth mesh on the GPU, without re-building per frame. In the future this could be used to allow tearing. All simulation is done within the game-thread, the current Gauss-Seidel relaxation method is inherently single threaded (unless a graph-colouring or Jacobi scheme is used instead). 
+
+Particles do not explicitly store velocities, instead as shown in [1] the velocities are instead derived from current and previous positions $(\mathbf{x}_{n}, \mathbf{x}_{n-1})$. The velocity-less Verlet integrator directly computes $\mathbf{x}_{n+1}$ given the particles acceleration:
+$$
+\mathbf{x}_{n+1} = 2\mathbf{x}_n - \mathbf{x}_{n-1} + \ddot{\mathbf{x}}_n \Delta t^2
+$$
+This makes it efficient, while been second order accurate. In hindsight, I would not recommend this and instead use an alternative like Störmer-Verlet or Semi-Implicit Euler, as this allows control of velocities along with explicit storage. Furthermore, as all forces (beyond gravity) acting on the particles are typically resolved by constraints (within a PBD like framework), the integration accuracy is not super important. 
+
+This is not the case here, as I implemented a volume-pressure conservation like force, which is resolved without constraints. Given a closed mesh, we can approximate its volume using average particle distances based on random sample positions, this will not work on an open mesh. 
+
+Some key points: 
+
+* This is a fast and simple solver, it could be great for set-dressing within the editor, by converting cloth back to static meshes. 
+* I did write a GPU version utilising Compute shaders, I may refactor this as part of a port to UE5 and RDG. 
+* This was a personal project from a few years ago, has not been maintained since me re-writing this README (due to other projects). 
+* If I was writing a cloth solver plugin now I would not PBD + Verlet Integration, I would use XPBD, given it's stability and timestep invariance. 
+* I've left this project online as it seems to have helped people writing plugins and understanding the aforementioned papers.  
+
+## Usage
+
+Simply place a empty actor into the scene, add a "Verlet Cloth Mesh" Component. Then select some Static Mesh to use as the base cloth mesh, and click the **BuildClothState** button, from here you can play with the simulation settings, while the solver ticks in the editor viewport, or run the component in PIE mode. 
 
 ## Building
-This plugin is currently implemented as a project plugin, placed into a plugin directory eg **./MyProject/Plugins**. The plugin comes with a few different test meshes, some of which are closed meshes which
-are for my future plans of implementing a fake volume preservation position projection solver step. Note the Stanford Bunny asset is from the Stanford 3D Scanning Library. 
-The Plugin is currently built under Unreal Engine 4.25.1, however it should build with 4.26. 
-Copy the contents into a folder named "VerletClothMesh" into your UE4 Project's Plugins directory, or your UE4 Engine Plugins install directory '../Epic Games/UE_4.2x/Engine/Plugins' and enable it in the editor. Note this may require you to rebuild the module on your machine, this requires Visual Studio 2017 and the required components for UE4 C++ Development. 
-Then simply place a empty actor into the scene, add a "Verlet Cloth Mesh" Component, select some Static Mesh to use as the base cloth mesh, and click the "BuildClothState" button, from here you can play with
-the simulation settings, while the solver ticks in the editor viewport, or run the component in PIE mode. 
+The Plugin is was tested with  UE4.25 | 4.26 | 4.27
+
+The plugin should be placed directly in a project location eg **./MyProject/Plugins**. This may require you to rebuild the module on your machine, this requires Visual Studio 2017/19/22 and the required components for UE4 C++ Development. 
+
+The plugin comes with a few different test meshes, some of which are closed meshes. Note the Stanford Bunny asset is a re-meshed version of the Bunny from the Stanford 3D Scanning Library. 
 
 ## Known Issues
 This project is a self educational project, and not intended for use in production, it has several known issues. 
-* Performance with high resolution meshes is not ideal, theres no use of Multi-Threading or GPU Compute based acceleration yet. 
-* Self Collisions are still a work in progress, and no doubt will need to use a more complex projection step than currently implemented, to be more temporally stable.  
-* If you change the Static Cloth Mesh within the component once BuildClothState has been invoked, the plugin will crash, this is due to the Static Mesh -> Procedural Mesh creation not been refreshed currently.
+* Self Collisions are resolved using discrete collision detection and are not completely stable. 
+* If you change the Static Cloth Mesh within the component once **BuildClothState** has been invoked, the plugin will crash, this is due to the Static Mesh -> Procedural Mesh creation not been refreshed currently.
 
-## To Do / Feature Ideas 
-- [x] Volume Pressure Force implementation.
-- [ ] GPU Compute Implementation of Constraint, Collision and Volume operations.
-- [ ] Basic tech demo interfacing with Blueprints. 
+Nonetheless, this code is licensed under the MIT License, feel free to do what you wish with it. 
+
+____
 
 ### References 
 1. * T.Jakobsen, Advanced Character Physics, (IO Interactive).
-2. * S.Green, Particle Based Fluid Simulation, (NVIDIA, GDC 2008).
+2. * Particle-Based Fluid Simulation for Interactive Applications (Müller et al. SCA 2003).
